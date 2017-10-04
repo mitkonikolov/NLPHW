@@ -20,20 +20,23 @@ public class LanguageModel {
 
 
     /**
-     *  The method parses the given training corpus. It extracts the data from
-     *  the csv file and call another method in order to record the found data.
+     *  Parses the given training corpus. It extracts the data from a csv file
+     *  and calls another method in order to record the information.
      */
     public void parseTrainingSet() {
         try {
-            CSVReader reader = new CSVReader(new FileReader("dev_set.csv"));
+            CSVReader reader = new CSVReader(new FileReader("train_set.csv"));
 
             String[] nextLine;
 
             try {
                 // eliminate the first field that says "text"
-                nextLine = reader.readNext();
+                reader.readNext();
+                reader.readNext();
                 while ((nextLine = reader.readNext()) != null) {
                     System.out.println(nextLine[8]);
+                    // ignore the next line because it is empty
+                    reader.readNext();
                 }
             }
             catch (IOException e) {
