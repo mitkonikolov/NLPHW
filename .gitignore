@@ -36,6 +36,10 @@ a1_datasets
 *.docx
 *.doc
 
+# IntelliJ Files
+workspace.xml
+tasks.xml
+
 # Temp notes
 *.rtf
 *.rtfd
