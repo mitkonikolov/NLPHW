@@ -12,6 +12,7 @@ public class LanguageModel {
 
     private HashMap<String, Integer> individualCounts;
     private HashMap<String, HashMap<String, Integer>> trigramCounts;
+    private int i=0;
 
     public LanguageModel() {
         this.individualCounts = new HashMap<>();
