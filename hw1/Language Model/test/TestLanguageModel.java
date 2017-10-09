@@ -1,9 +1,7 @@
 import org.junit.Test;
 import org.junit.Assert;
 
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
+import java.util.*;
 
 import static org.junit.Assert.*;
 
@@ -786,6 +784,7 @@ public class TestLanguageModel {
 
     }
 
+
     private void compareLists(HashMap<Integer, List<String>> r,
                               HashMap<Integer, List<String>> expected) {
         for(int i = 0; i<r.size(); i++) {
@@ -799,6 +798,48 @@ public class TestLanguageModel {
                 System.out.println(actualLine.get(p));
                 assertEquals(expectedLine.get(p), actualLine.get(p));
             }
+        }
+    }
+
+
+    @Test
+    public void testLearnIndCount() {
+        LanguageModel lm = new LanguageModel("train_set4.csv");
+
+        lm.parseTrainingSet();
+        lm.remExtraChars();
+        lm.finishProcessingWords();
+        lm.learn();
+
+        HashMap<String, Integer> indCount = lm.getIndividualCounts();
+
+        HashMap<String, Integer> indCountExpected = new HashMap<>();
+
+        indCountExpected.put("<s><s>", 3);
+        indCountExpected.put("okay", 1);
+        indCountExpected.put(".", 1);
+        indCountExpected.put("so", 1);
+        indCountExpected.put(",", 2);
+        indCountExpected.put("i", 1);
+        indCountExpected.put("guess", 1);
+        indCountExpected.put("</s>", 3);
+
+        compareIndCounts(indCountExpected, indCount);
+    }
+
+    private void compareIndCounts(HashMap<String, Integer> expected,
+                                  HashMap<String, Integer> actual) {
+        assertEquals("size of individual count maps",
+                actual.size(), expected.size());
+
+        Iterator iteratorActual = actual.entrySet().iterator();
+        Iterator iteratorExpected = expected.entrySet().iterator();
+
+        while(iteratorActual.hasNext()) {
+            String expectedWord = iteratorExpected.next().toString();
+            String actualWord = iteratorActual.next().toString();
+
+            assertEquals(expectedWord, actualWord);
         }
     }
 

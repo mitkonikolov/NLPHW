@@ -5,6 +5,7 @@ import java.io.FileReader;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.Iterator;
 import java.util.List;
 import java.util.regex.Pattern;
 
@@ -17,7 +18,11 @@ public class LanguageModel {
     private HashMap<Integer, List<String>> wordsByLine; // all words on all lines
     private List<String> words; // words on line X that are currently processed
     private HashMap<String, Integer> individualCounts;
+    // Format: <words> ---seen before---> (word, count)
     private HashMap<String, HashMap<String, Integer>> trigramCounts;
+    // trigram count for words currently unknown.
+    // Format: <word> ---seen after---> (words, count)
+    private HashMap<String, HashMap<String, Integer>> trigramCountsUNK;
 
     public LanguageModel() {
         this.trainingSet = "train_set.csv";
@@ -25,6 +30,7 @@ public class LanguageModel {
         this.words = new ArrayList<>();
         this.individualCounts = new HashMap<>();
         this.trigramCounts = new HashMap<>();
+        this.trigramCountsUNK = new HashMap<>();
     }
 
     public LanguageModel(String trainingSetName) {
@@ -33,6 +39,7 @@ public class LanguageModel {
         this.wordsByLine = new HashMap<>();
         this.individualCounts = new HashMap<>();
         this.trigramCounts = new HashMap<>();
+        this.trigramCountsUNK = new HashMap<>();
     }
 
 
@@ -286,8 +293,8 @@ public class LanguageModel {
      * @param word the {@code String} under number {@param p} in this.words
      */
     private void extractWordsFromLongComment(Character firstChar,
-                                            int p,
-                                            String word) {
+                                             int p,
+                                             String word) {
         if(firstChar.equals('(') && word.length()!=2) {
             Character secondChar = word.charAt(1);
 
@@ -422,6 +429,172 @@ public class LanguageModel {
         }
 
         return p;
+    }
+
+    /**
+     * It goes through the data and calculates individual and trigram count.
+     */
+    public void learn() {
+        for(int i=0; i<this.wordsByLine.size(); i++) {
+            this.words = this.wordsByLine.get(i);
+
+            countIndividualAndTrigram();
+        }
+    }
+
+    /**
+     * Counts individually all the words from the line this.words
+     * into this.individualCounts and manages the trigram count using UNK tag.
+     */
+    private void countIndividualAndTrigram() {
+        String word;
+        for(int i=0; i<this.words.size(); i++) {
+            word = this.words.get(i);
+
+            // the word is already in the map so I increment its value
+            if(this.individualCounts.containsKey(word)) {
+                individualCounts.put(word,
+                        (individualCounts.get(word) + 1));
+            }
+            // the word had not been seen until now so I need to enter it
+            else {
+                individualCounts.put(word, 1);
+            }
+
+            String previousTwoWords = "";
+
+            switch(i) {
+                case 0:
+                    break;
+                case 1:
+                    previousTwoWords = "<s><s>";
+                    break;
+                case 2:
+                    previousTwoWords = "<s> " + this.words.get(1);
+                    break;
+                default:
+                    previousTwoWords = this.words.get(i - 2) + " " + this.words.get(i-1);
+                    break;
+            }
+
+            // if we are looking at the first word or futher
+            if(i>0) {
+                int numberOfOccurences = this.individualCounts.get(word);
+
+                // the word was just seen for the fifth time and just became
+                // known
+                if(numberOfOccurences == 5) {
+                    // final increment before change
+                    incrementTrigramCounts(previousTwoWords, "UNK");
+                    incrementTrigramCountsUNK(previousTwoWords, word);
+
+                    // using the data in this.trigramCountsUNK it changes the
+                    // word UNK to known by updating this.trigramCounts
+                    changeUnkToKnown(word);
+                }
+                // the word has already been known
+                else if(numberOfOccurences > 5) {
+                    incrementTrigramCounts(previousTwoWords, word);
+                }
+                // the word is unknown
+                else {
+                    incrementTrigramCounts(previousTwoWords, "UNK");
+                    incrementTrigramCountsUNK(previousTwoWords, word);
+                }
+            }
+        }
+    }
+
+    public HashMap<String, Integer> getIndividualCounts() {
+        return this.individualCounts;
+    }
+
+    public HashMap<String, HashMap<String, Integer>> getTrigramCounts() {
+        return this.trigramCounts;
+    }
+
+    private void incrementTrigramCounts(String previousTwoWords, String word) {
+        // have I seen these previousTwoWords already
+        if(this.trigramCounts.containsKey(previousTwoWords)) {
+            HashMap<String, Integer> wordsAfter = this.trigramCounts.get(previousTwoWords);
+
+            // I have seen this word after these specific words already
+            if(wordsAfter.containsKey(word)) {
+                // increment the count
+                wordsAfter.put(word, (wordsAfter.get(word) + 1));
+            }
+            // I have not seen this word after this specific words until now
+            else {
+                wordsAfter.put(word, 1);
+            }
+
+            this.trigramCounts.put(previousTwoWords, wordsAfter);
+        }
+        // I have not seen these previousTwoWords up until now
+        else {
+            // create a hashmap of strings and integeres for the words after
+            HashMap<String, Integer> wordsAfter = new HashMap<>();
+            wordsAfter.put(word, 1);
+
+            // add the previousTwoWords to trigramCounts with the wordsAfter
+            this.trigramCounts.put(previousTwoWords, wordsAfter);
+        }
+    }
+
+
+    private void incrementTrigramCountsUNK(String previousTwoWords, String word) {
+        // have I seen this word previously
+        if(this.trigramCountsUNK.containsKey(word)) {
+            HashMap<String, Integer> wordsBefore = this.trigramCountsUNK.get(word);
+
+            // have I seen these previousTwoWords before this word already
+            if(wordsBefore.containsKey(previousTwoWords)) {
+                // increment the value
+                wordsBefore.put(previousTwoWords,
+                        (wordsBefore.get(previousTwoWords) + 1));
+            }
+            // this is the first time I see the previousTwoWords before this word
+            else {
+                wordsBefore.put(previousTwoWords, 1);
+            }
+        }
+        // I have not seen this word previously
+        else {
+            HashMap<String, Integer> wordsBefore = new HashMap<>();
+            // this must be the first time I see these previousTwoWords
+            wordsBefore.put(previousTwoWords, 1);
+
+            this.trigramCountsUNK.put(word, wordsBefore);
+        }
+    }
+
+
+    private void changeUnkToKnown(String word) {
+        // words that have been seen before word
+        HashMap<String, Integer> wordsBefore = this.trigramCountsUNK.get(word);
+
+        Iterator iterateWordsBefore = wordsBefore.entrySet().iterator();
+
+        while(iterateWordsBefore.hasNext()) {
+            String expression = iterateWordsBefore.next().toString();
+            String separateWords[] = expression.split("=");
+
+            // words before word
+            String words = separateWords[0];
+            // how many times have I seen word after these wordsBefore
+            int occurences = wordsBefore.get(words);
+
+            // the current wordsAfter which list the word as UNK
+            HashMap<String, Integer> wordsAfter = this.trigramCounts.get(words);
+
+            // decrease the number of UNK after wordsBefore
+            wordsAfter.put("UNK", (wordsAfter.get("UNK") - occurences));
+            // put the number of occurences as for a known word
+            wordsAfter.put(word, occurences);
+
+            // finally, update this.trigramCounts
+            this.trigramCounts.put(words, wordsAfter);
+        }
     }
 
 }
