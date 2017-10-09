@@ -20,16 +20,7 @@ public class LanguageModel {
     // trigram count for words currently unknown.
     // Format: <word> ---seen after---> (words, count)
     private HashMap<String, HashMap<String, Integer>> trigramCountsUNK;
-
-    public int getA() {
-        return a;
-    }
-
-    public void incrementA() {
-        this.a += 1;
-    }
-
-    private int a;
+    private HashMap<String, HashMap<String, Double>> trigramProbabilities;
 
     public LanguageModel() {
         this.trainingSet = "train_set.csv";
@@ -38,16 +29,17 @@ public class LanguageModel {
         this.individualCounts = new HashMap<>();
         this.trigramCounts = new HashMap<>();
         this.trigramCountsUNK = new HashMap<>();
+        this.trigramProbabilities = new HashMap<>();
     }
 
     public LanguageModel(String trainingSetName) {
-        a = 1;
         this.trainingSet = trainingSetName;
         this.words = new ArrayList<>();
         this.wordsByLine = new HashMap<>();
         this.individualCounts = new HashMap<>();
         this.trigramCounts = new HashMap<>();
         this.trigramCountsUNK = new HashMap<>();
+        this.trigramProbabilities = new HashMap<>();
     }
 
 
@@ -731,5 +723,75 @@ public class LanguageModel {
         }
 
     }
+
+
+    public void calculateProbabilities() {
+        Set<String> allBigrams = this.trigramCounts.keySet();
+
+        Iterator bigramsIter = allBigrams.iterator();
+
+        String key;
+
+        String innerKey;
+
+        int vocabularySize = this.individualCounts.size();
+
+        while(bigramsIter.hasNext()) {
+            // get the bigram key to update the values for the words after it
+            key = bigramsIter.next().toString();
+
+            HashMap<String, Integer> wordsAfter = this.trigramCounts.get(key);
+            HashMap<String, Double> probabilitiesAfter = new HashMap<>();
+
+            // how many times w(n-1) has been seen
+            int numberOfTimesBigramOccurs = calculateBigramOccurence(wordsAfter);
+
+            Set<String> allUnigrams = wordsAfter.keySet();
+            Iterator unigramIter = allUnigrams.iterator();
+
+            while(unigramIter.hasNext()) {
+                innerKey = unigramIter.next().toString();
+                int currentNumberOfOccurences = wordsAfter.get(innerKey);
+
+                Double numOccurences = (double) currentNumberOfOccurences;
+
+                Double probability = numOccurences / (numberOfTimesBigramOccurs + vocabularySize);
+
+                // change wordsAfter to include probabilities now
+                probabilitiesAfter.put(innerKey, probability);
+            }
+
+            this.trigramProbabilities.put(key, probabilitiesAfter);
+        }
+    }
+
+
+    public HashMap<String, HashMap<String, Double>> getTrigramProbabilities() {
+        return this.trigramProbabilities;
+    }
+
+
+    private int calculateBigramOccurence(HashMap<String, Integer> wordsAfter) {
+        int occurences = 0;
+
+        Set innerKeys = wordsAfter.keySet();
+
+        Iterator innerKeysIter = innerKeys.iterator();
+
+        while(innerKeysIter.hasNext()) {
+            String innerKey = innerKeysIter.next().toString();
+
+            // accumulate occurences using the number of times
+            // different words have been seen after the current bigram.
+            // Whenever the bigram has occured, there has always been something
+            // after it.
+            occurences += wordsAfter.get(innerKey);
+        }
+
+        return occurences;
+    }
+
+
+
 
 }

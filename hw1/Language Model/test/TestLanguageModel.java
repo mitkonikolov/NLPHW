@@ -997,6 +997,88 @@ public class TestLanguageModel {
     }*/
 
 
+    @Test
+    public void testCalculateProbabilities() {
+        LanguageModel lm = new LanguageModel("train_set.csv");
+
+        lm.parseTrainingSet();
+        lm.remExtraChars();
+        lm.finishProcessingWords();
+        lm.learn();
+
+        HashMap<String, HashMap<String, Integer>> trigramsBeforeSmoothing;
+        trigramsBeforeSmoothing = lm.getTrigramCounts();
+
+        //showTrigrams(trigramsBeforeSmoothing);
+
+        System.out.println();
+        System.out.println();
+        System.out.println();
+
+
+
+        lm.add1Smoothing();
+
+        HashMap<String, HashMap<String, Integer>> trigramsAfterSmoothing;
+        trigramsAfterSmoothing = lm.getTrigramCounts();
+
+        //showTrigrams(trigramsAfterSmoothing);
+
+        System.out.println();
+        System.out.println();
+        System.out.println();
+
+
+
+
+
+        HashMap<String, HashMap<String, Double>> trigramProbabilities;
+        lm.calculateProbabilities();;
+        trigramProbabilities = lm.getTrigramProbabilities();
+
+        System.out.println();
+        System.out.println();
+        System.out.println();
+
+        showDoubleTrigrams(trigramProbabilities);
+    }
+
+
+
+    private void showDoubleTrigrams(HashMap<String, HashMap<String, Double>> trigramCounts) {
+        Iterator wordsBeforeIter = trigramCounts.entrySet().iterator();
+
+        String expression;
+
+        while(wordsBeforeIter.hasNext()) {
+            expression = wordsBeforeIter.next().toString();
+
+            System.out.println(expression);
+        }
+    }
+
+    @Test
+    public void testIndCount() {
+        LanguageModel lm = new LanguageModel("train_set9.csv");
+
+        lm.parseTrainingSet();
+        lm.remExtraChars();
+        lm.finishProcessingWords();
+        lm.learn();
+
+        HashMap<String, Integer> individualCounts = lm.getIndividualCounts();
+
+        assertEquals(8, individualCounts.size());
+
+        Set <String> keys = individualCounts.keySet();
+        Iterator i = keys.iterator();
+
+        while(i.hasNext()) {
+            System.out.println(i.next().toString());
+        }
+    }
+
+
 
 
 }
