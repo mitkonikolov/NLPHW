@@ -925,4 +925,78 @@ public class TestLanguageModel {
         }
     }
 
+
+    @Test
+    public void testAdd1Smoothing() {
+        LanguageModel lm = new LanguageModel("train_set7.csv");
+
+        lm.parseTrainingSet();
+        lm.remExtraChars();
+        lm.finishProcessingWords();
+        lm.learn();
+
+        HashMap<String, HashMap<String, Integer>> trigramsBeforeSmoothing;
+        trigramsBeforeSmoothing = lm.getTrigramCounts();
+
+        showTrigrams(trigramsBeforeSmoothing);
+
+        System.out.println();
+        System.out.println();
+        System.out.println();
+
+        lm.add1Smoothing();
+
+        HashMap<String, HashMap<String, Integer>> trigramsAfterSmoothing;
+        trigramsAfterSmoothing = lm.getTrigramCounts();
+
+        showTrigrams(trigramsAfterSmoothing);
+    }
+
+/*    private void compareFirst100Trigrams(HashMap<String, HashMap<String, Integer>> before,
+                                         HashMap<String, HashMap<String, Integer>> after) {
+        // all two words coming before (bigrams)
+        Set<String> keysBefore = before.keySet();
+
+        // iterators to iterate over the keys on the outer map
+        Iterator keysIter = keysBefore.iterator();
+
+        String key;
+
+        String innerKey;
+
+        for(int i=0; (i<1) && keysIter.hasNext(); i++) {
+            key = keysIter.next().toString();
+
+            HashMap<String, Integer> wordsAfterNoSmoothing = before.get(key);
+            HashMap<String, Integer> wordsAfterWithSmoothing = after.get(key);
+
+            // all words coming after the two words (unigrams)
+            Set<String> words = wordsAfterNoSmoothing.keySet();
+
+            // iterator to iterate over the string key of the inner map
+            Iterator innerKeysIter = words.iterator();
+
+            // check all numbers for the strings in the inner map
+            while(innerKeysIter.hasNext()) {
+                innerKey = innerKeysIter.next().toString();
+
+                int numberBeforeSmoothing = wordsAfterNoSmoothing.get(innerKey);
+                int numberAfterSmoothing = wordsAfterWithSmoothing.get(innerKey);
+
+                numberBeforeSmoothing += 1;
+
+                System.out.println(numberBeforeSmoothing);
+                System.out.println(numberAfterSmoothing);
+
+                System.out.println(key);
+
+                assertEquals(key,numberBeforeSmoothing, numberAfterSmoothing);
+            }
+
+        }
+    }*/
+
+
+
+
 }

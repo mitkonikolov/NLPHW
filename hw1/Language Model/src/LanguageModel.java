@@ -3,10 +3,7 @@ import com.opencsv.CSVReader;
 import java.io.FileNotFoundException;
 import java.io.FileReader;
 import java.io.IOException;
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.Iterator;
-import java.util.List;
+import java.util.*;
 import java.util.regex.Pattern;
 
 /**
@@ -24,6 +21,16 @@ public class LanguageModel {
     // Format: <word> ---seen after---> (words, count)
     private HashMap<String, HashMap<String, Integer>> trigramCountsUNK;
 
+    public int getA() {
+        return a;
+    }
+
+    public void incrementA() {
+        this.a += 1;
+    }
+
+    private int a;
+
     public LanguageModel() {
         this.trainingSet = "train_set.csv";
         this.wordsByLine = new HashMap<>();
@@ -34,6 +41,7 @@ public class LanguageModel {
     }
 
     public LanguageModel(String trainingSetName) {
+        a = 1;
         this.trainingSet = trainingSetName;
         this.words = new ArrayList<>();
         this.wordsByLine = new HashMap<>();
@@ -683,6 +691,45 @@ public class LanguageModel {
             // finally, update this.trigramCounts
             this.trigramCounts.put(words, wordsAfter);
         }
+    }
+
+
+    /**
+     * Performs add1 smoothing by adding 1 to each of the numbers
+     * in this.trigramCounts.
+     */
+    public void add1Smoothing() {
+
+        Set<String> allBigrams = this.trigramCounts.keySet();
+
+        Iterator bigramsIter = allBigrams.iterator();
+
+        String key;
+
+        String innerKey;
+
+        while(bigramsIter.hasNext()) {
+            // get the bigram key to update the values for the words after it
+            key = bigramsIter.next().toString();
+
+            HashMap<String, Integer> wordsAfter = this.trigramCounts.get(key);
+
+            Set<String> allUnigrams = wordsAfter.keySet();
+            Iterator unigramIter = allUnigrams.iterator();
+
+            while(unigramIter.hasNext()) {
+                innerKey = unigramIter.next().toString();
+                int currentNumberOfOccurences = wordsAfter.get(innerKey);
+
+                // add 1 smoothing
+                currentNumberOfOccurences += 1;
+
+                wordsAfter.put(innerKey, currentNumberOfOccurences);
+            }
+
+            this.trigramCounts.put(key, wordsAfter);
+        }
+
     }
 
 }
