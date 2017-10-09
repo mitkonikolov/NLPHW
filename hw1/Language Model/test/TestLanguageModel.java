@@ -853,6 +853,7 @@ public class TestLanguageModel {
 
             for(int p = 0; p<actualLine.size(); p++) {
                 System.out.println(actualLine.get(p));
+                System.out.println(expectedLine.get(p));
                 assertEquals(expectedLine.get(p), actualLine.get(p));
             }
         }
@@ -1033,7 +1034,7 @@ public class TestLanguageModel {
 
 
         HashMap<String, HashMap<String, Double>> trigramProbabilities;
-        lm.calculateProbabilities();;
+        lm.calculateProbabilities();
         trigramProbabilities = lm.getTrigramProbabilities();
 
         System.out.println();
@@ -1075,6 +1076,35 @@ public class TestLanguageModel {
 
         while(i.hasNext()) {
             System.out.println(i.next().toString());
+        }
+    }
+
+    @Test
+    public void testCalculatePerplexity() {
+        LanguageModel lm = new LanguageModel("train_set.csv");
+
+        lm.parseTrainingSet();
+        lm.remExtraChars();
+        lm.finishProcessingWords();
+        lm.learn();
+        lm.add1Smoothing();
+        lm.calculateProbabilities();
+
+        System.out.println("starting perplexity calc");
+
+        System.out.println(lm.calculatePerplexity("test_set.csv"));
+
+
+    }
+
+
+    private void printWords(HashMap<Integer, List<String>> r) {
+        for(int i = 0; i<r.size(); i++) {
+            List<String> actualLine = r.get(i);
+
+            for(int p = 0; p<actualLine.size(); p++) {
+                System.out.println(actualLine.get(p));
+            }
         }
     }
 

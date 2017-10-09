@@ -771,6 +771,16 @@ public class LanguageModel {
     }
 
 
+    /**
+     * Calculates the total number of occurences of all {@code String} objects
+     * in {@param wordsAfter}. By knowing how many words in total occur after
+     * a bigram, I know how many times the bigram itself has occured.
+     *
+     * @param wordsAfter {@code HashMap} of all {@code String} objects after a bigram
+     *
+     * @return an {@code int} that represents the total number of occurences
+     *          for the bigram
+     */
     private int calculateBigramOccurence(HashMap<String, Integer> wordsAfter) {
         int occurences = 0;
 
@@ -792,6 +802,102 @@ public class LanguageModel {
     }
 
 
+    /**
+     * Parses the test set by the name testSetName and calculates its perplexity
+     * based on the probabilities calculated with the train set.
+     *
+     * @param testSetName the name of the test set
+     * @return a {@code double} representing the perplexity for the given
+     * test set
+     */
+    public double calculatePerplexity(String testSetName) {
+        this.trainingSet = testSetName;
 
+        // after these operations all the words from the train set will be
+        // this.wordsByLine
+        parseTrainingSet();
+        remExtraChars();
+        finishProcessingWords();
+
+        double totalPerplexity = 0;
+
+        for(int i=0; i<this.wordsByLine.size(); i++) {
+            List<String> line = this.wordsByLine.get(i);
+
+            totalPerplexity += calculatePerplexityForLine(line);
+        }
+
+        double averagePerplexity = totalPerplexity / (this.wordsByLine.size());
+
+        return averagePerplexity;
+    }
+
+
+    /**
+     * Given a {@code List<String>} representing all the words on a line in
+     * the test set it calculates the perplexity for this line using the
+     * already calculated probabilities in this.trigramProbabilities.
+     *
+     * @param line the {@code List<String>} to calculate perplexity of
+     * @return the perplexity for {@param line}
+     */
+    private double calculatePerplexityForLine(List<String> line) {
+        double perplexity;
+        double probabilityOfSentence = 1;
+        String bigramBefore;
+        String currentWord;
+
+        for(int i=1; i<line.size(); i++) {
+
+            // find the probability of currentWord given bigramBefore
+            currentWord = line.get(i);
+
+            switch(i) {
+                // the first word in the sentence
+                case 1:
+                    bigramBefore = "<s><s>";
+                    break;
+                // the second word in the sentence
+                case 2:
+                    bigramBefore = "<s> " + line.get(1);
+                    break;
+                // third word or further
+                default:
+                    bigramBefore = line.get(i-2) + " " + line.get(i-1);
+                    break;
+            }
+
+            // this biagram has been seen in the training set
+            if(this.trigramProbabilities.containsKey(bigramBefore)) {
+                HashMap<String, Double> wordsAfterProbabilities =
+                        this.trigramProbabilities.get(bigramBefore);
+
+                // there is a probability for currentWord given bigramBefore
+                if(wordsAfterProbabilities.containsKey(currentWord)) {
+                    probabilityOfSentence = probabilityOfSentence *
+                            wordsAfterProbabilities.get(currentWord);
+                }
+                // use the UNK probability
+                else if(wordsAfterProbabilities.containsKey("UNK")) {
+                    probabilityOfSentence = probabilityOfSentence *
+                            wordsAfterProbabilities.get("UNK");
+                }
+                else {
+                    probabilityOfSentence = probabilityOfSentence * 1;
+                }
+            }
+            else {
+                probabilityOfSentence = probabilityOfSentence * 1;
+            }
+        }
+
+        perplexity = 1 / probabilityOfSentence;
+
+        NthRoot rootCalculator = new NthRoot();
+
+        perplexity = rootCalculator.nthroot(line.size(), perplexity);
+
+        return perplexity;
+    }
 
 }
