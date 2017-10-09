@@ -120,7 +120,7 @@ public class LanguageModel {
 
                 p = removeLongComments(firstChar, p, word);
 
-                extractWordsFromLongComment(firstChar, p, word);
+                extractWordsFromLongComment(firstChar, p, word, '(',')');
             }
         }
     }
@@ -144,42 +144,6 @@ public class LanguageModel {
         else {
             return false;
         }
-    }
-
-
-    /**
-     * Given a beginning of a block (like < ... > or <+ ... +> or ((...)) )
-     * through the parameter {@param wordNumber}, it starts going through the
-     * words in {@param words} and looks for the end of the block. It defines
-     * the end as the occurence of the {@code Character} {@param finish}.
-     *
-     * @param wordNumber the word number where the block starts
-     * @param words {@code list} of words
-     * @param finish {@code Character} which signifies the end of the block
-     * @return an {@code int} showing the length of the block in separate words
-     */
-    private int findCommentLength(int wordNumber, List<String> words, Character finish) {
-        int numWordsRemoved = 1;
-        for(int i=wordNumber; i<words.size(); i++) {
-            String word = words.get(i);
-            Character lastChar;
-
-            if(endsWithPunctuationMark(word)) {
-                lastChar = word.charAt(word.length()-2);
-            }
-            else {
-                lastChar = word.charAt(word.length()-1);
-            }
-
-            if(lastChar.equals(finish)) {
-                return numWordsRemoved;
-            }
-            else {
-                numWordsRemoved += 1;
-            }
-        }
-
-        return -1;
     }
 
     // toDO: when I start the counting I have to remove anything
@@ -245,25 +209,10 @@ public class LanguageModel {
                 case '<':
                 case '+':
                     // how many words will I have to remove
-                    int numWordsToRemove = findCommentLength(p, words, '>');
+                    p = findAndRemoveLongComment(p, '>');
 
-                    for (int wordInd = 0; wordInd < numWordsToRemove; wordInd++) {
-                        // is this the last word I need to remove
-                        // and does it finish with a punc. mark?
-                        if((wordInd == (numWordsToRemove-1)) &&
-                                this.endsWithPunctuationMark(words.get(p))) {
-                            String newString = words.get(p);
-                            newString = "" + newString.charAt(newString.length()-1);
-                            words.set(p, newString);
-                        }
-                        else {
-                            // this is not the last word or there is no
-                            // punctuation mark that I need to preserve
-                            words.remove(p);
-                        }
-                    }
-                    // p+1 might not exist anymore
-                    p -= 1;
+                    //p = removeWords(numWordsToRemove, p);
+
                     break;
                 default:
                     Character lastChar = word.charAt(word.length()-1);
@@ -276,13 +225,104 @@ public class LanguageModel {
                         p -= 1;
                     }
                     else {
-                        throw new RuntimeException("unknown ending of a string");
+                        //throw new RuntimeException("unknown ending of a string " + word);
+                        p = findAndRemoveLongComment(p, '>');
+                        //p = removeWords(numWordsToRemove, p);
                     }
             }
         }
 
         return p;
     }
+
+
+    /**
+     * Given a beginning of a block (like < ... > or <+ ... +> or ((...)) )
+     * through the parameter {@param p}, it starts going through the
+     * words in this.words and looks for the end of the block. It defines
+     * the end as the occurence of the {@code Character} {@param finish}.
+     * As it goes through the block, it deletes words which are part of the
+     * comment and preserves punctuation marks if they are at the end of the
+     * comment as in for example: <...>,
+     *
+     * @param p the word number where the block starts
+     * @param finish {@code Character} which signifies the end of the block
+     * @return an {@code int} the current word that must be considered
+     */
+    private int findAndRemoveLongComment(int p, Character finish) {
+
+        int wordSize = this.words.size();
+
+        for(int i=p; i<wordSize; i++) {
+            String word = this.words.get(p);
+
+            Character lastChar;
+
+            if(endsWithPunctuationMark(word)) {
+                lastChar = word.charAt(word.length()-2);
+
+                // this is the last word and there is a punc. mark I
+                // need to preserve
+                if(lastChar.equals(finish)) {
+                    this.words.set(p, word.charAt(word.length()-1)+"");
+
+                    // update p because there might not be p+1 anymore
+                    return (p-1);
+                }
+                // this is not the last word so I just remove it
+                else {
+                    this.words.remove(p);
+                }
+
+            }
+            else {
+                lastChar = word.charAt(word.length()-1);
+
+                this.words.remove(p);
+
+                // this is the last word and it does not finish with a
+                // punctuation mark that I need to preserve
+                if(lastChar.equals(finish)) {
+
+
+                    // update p because there might not be p+1 anymore
+                    return (p-1);
+                }
+            }
+        }
+
+        return -1;
+    }
+
+
+    /**
+     * Remove as many words as numWordsToRemove says starting at p.
+     *
+     * @param numWordsToRemove the # of words to remove
+     * @param p the word that is currently being considered
+     * @return the updated {@param p}
+     */
+/*    private int removeWords(int numWordsToRemove, int p) {
+        for (int wordInd = 0; wordInd < numWordsToRemove; wordInd++) {
+            // is this the last word I need to remove
+            // and does it finish with a punc. mark?
+            if((wordInd == (numWordsToRemove-1)) &&
+                    this.endsWithPunctuationMark(words.get(p))) {
+                String newString = words.get(p);
+                newString = "" + newString.charAt(newString.length()-1);
+                words.set(p, newString);
+            }
+            else {
+                // this is not the last word or there is no
+                // punctuation mark that I need to preserve
+                words.remove(p);
+            }
+        }
+        // p+1 might not exist anymore
+        p -= 1;
+
+        return p;
+    }*/
 
 
     /**
@@ -294,12 +334,14 @@ public class LanguageModel {
      */
     private void extractWordsFromLongComment(Character firstChar,
                                              int p,
-                                             String word) {
-        if(firstChar.equals('(') && word.length()!=2) {
+                                             String word,
+                                             Character matchBeginning,
+                                             Character matchEnding) {
+        if(firstChar.equals(matchBeginning) && word.length()!=2) {
             Character secondChar = word.charAt(1);
 
-            if(secondChar.equals('(')) {
-                int numWordsToKeep = this.findCommentLength(p, words, ')');
+            if(secondChar.equals(matchBeginning)) {
+                int numWordsToKeep = this.findCommentLength(p, words, matchEnding);
 
                 int wordInd = p;
 
@@ -326,6 +368,42 @@ public class LanguageModel {
                 }
             }
         }
+    }
+
+
+    /**
+     * Given a beginning of a block (like < ... > or <+ ... +> or ((...)) )
+     * through the parameter {@param wordNumber}, it starts going through the
+     * words in {@param words} and looks for the end of the block. It defines
+     * the end as the occurence of the {@code Character} {@param finish}.
+     *
+     * @param wordNumber the word number where the block starts
+     * @param words {@code list} of words
+     * @param finish {@code Character} which signifies the end of the block
+     * @return an {@code int} showing the length of the block in separate words
+     */
+    private int findCommentLength(int wordNumber, List<String> words, Character finish) {
+        int numWordsRemoved = 1;
+        for(int i=wordNumber; i<words.size(); i++) {
+            String word = words.get(i);
+            Character lastChar;
+
+            if(endsWithPunctuationMark(word)) {
+                lastChar = word.charAt(word.length()-2);
+            }
+            else {
+                lastChar = word.charAt(word.length()-1);
+            }
+
+            if(lastChar.equals(finish)) {
+                return numWordsRemoved;
+            }
+            else {
+                numWordsRemoved += 1;
+            }
+        }
+
+        return -1;
     }
 
 
@@ -424,12 +502,21 @@ public class LanguageModel {
             String[] ws = word.split("'");
             this.words.set(p, ws[0]);
             this.words.add(p+1, "'");
-            this.words.add(p+2, ws[1]);
-            p += 2;
+
+            // in words like kids', there is text only before the apostrophy
+            if(ws.length>1) {
+                this.words.add(p + 2, ws[1]);
+                p += 2;
+            }
+            else {
+                p += 1;
+            }
+
         }
 
         return p;
     }
+
 
     /**
      * It goes through the data and calculates individual and trigram count.
@@ -441,6 +528,7 @@ public class LanguageModel {
             countIndividualAndTrigram();
         }
     }
+
 
     /**
      * Counts individually all the words from the line this.words

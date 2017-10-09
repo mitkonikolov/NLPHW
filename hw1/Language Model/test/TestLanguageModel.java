@@ -319,6 +319,24 @@ public class TestLanguageModel {
     }
 
     @Test
+    public void testRemExtraChars3() {
+        LanguageModel lm = new LanguageModel("train_set6.csv");
+        lm.parseTrainingSet();
+        lm.remExtraChars();
+        HashMap<Integer, List<String>> r = lm.getWordsByLine();
+
+        List<String> line1 = new ArrayList<>();
+        line1.add("I");
+
+        HashMap<Integer, List<String>> expected = new HashMap<>();
+
+        expected.put(0, line1);
+
+        this.compareLists(r, expected);
+    }
+
+
+    @Test
     public void testFinishProcessingWords1() {
         LanguageModel lm = new LanguageModel("train_set1.csv");
 
@@ -741,6 +759,41 @@ public class TestLanguageModel {
         line37.add(".");
         line37.add("</s>");
 
+        List<String> line38 = new ArrayList<>();
+        line38.add("<s><s>");
+        line38.add(".");
+        line38.add("</s>");
+
+        List<String> line39 = new ArrayList<>();
+        line39.add("<s><s>");
+        line39.add("and");
+        line39.add("nowhere");
+        line39.add("does");
+        line39.add(".");
+        line39.add("</s>");
+
+        List<String> line40 = new ArrayList<>();
+        line40.add("<s><s>");
+        line40.add("well");
+        line40.add(",");
+        line40.add("i");
+        line40.add("haven");
+        line40.add("'");
+        line40.add("t");
+        line40.add("tried");
+        line40.add(",");
+        line40.add("</s>");
+
+        List<String> line41 = new ArrayList<>();
+        line41.add("<s><s>");
+        line41.add("oh");
+        line41.add(",");
+        line41.add("i");
+        line41.add("like");
+        line41.add("it");
+        line41.add(".");
+        line41.add("</s>");
+
         HashMap<Integer, List<String>> expected = new HashMap<>();
         expected.put(0, line1);
         expected.put(1, line2);
@@ -779,6 +832,10 @@ public class TestLanguageModel {
         expected.put(34, line35);
         expected.put(35, line36);
         expected.put(36, line37);
+        expected.put(37, line38);
+        expected.put(38, line39);
+        expected.put(39, line40);
+        expected.put(40, line41);
 
         this.compareLists(r, expected);
 
@@ -840,6 +897,31 @@ public class TestLanguageModel {
             String actualWord = iteratorActual.next().toString();
 
             assertEquals(expectedWord, actualWord);
+        }
+    }
+
+    @Test
+    public void testLearningAllWords() {
+        LanguageModel lm = new LanguageModel("train_set.csv");
+
+        lm.parseTrainingSet();
+        lm.remExtraChars();
+        lm.finishProcessingWords();
+        lm.learn();
+
+        showTrigrams(lm.getTrigramCounts());
+    }
+
+
+    private void showTrigrams(HashMap<String, HashMap<String, Integer>> trigramCounts) {
+        Iterator wordsBeforeIter = trigramCounts.entrySet().iterator();
+
+        String expression;
+
+        while(wordsBeforeIter.hasNext()) {
+            expression = wordsBeforeIter.next().toString();
+
+            System.out.println(expression);
         }
     }
 
