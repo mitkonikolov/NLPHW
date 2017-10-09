@@ -339,14 +339,19 @@ public class LanguageModel {
                     this.words.add(0, "<s><s>");
                 }
                 // this is the last word and </s> needs to be added after it
-                else if (p==this.words.size()-1) {
+                else if (p==(this.words.size()-1)) {
                     word = this.words.get(p);
 
                     // lowercase the word and update it in this.words
                     word = word.toLowerCase();
                     this.words.set(p, word);
 
-                    if(endsWithPunctuationMark(word)) {
+                    // split the word into separate parts if it contains
+                    // an apostrophy and update the variable word
+                    p = this.containsApostrophy(word, p);
+                    word = this.words.get(p);
+
+                    if(endsWithPunctuationMark(word) && (word.length() > 1)) {
                         Character puncMark = word.charAt(word.length()-1);
 
                         // update the current word by removing the punc mark
@@ -373,6 +378,11 @@ public class LanguageModel {
                     word = word.toLowerCase();
                     this.words.set(p, word);
 
+                    // split the word into separate parts if it contains
+                    // an apostrophy and update the variable word
+                    p = this.containsApostrophy(word, p);
+                    word = this.words.get(p);
+
                     if(endsWithPunctuationMark(word) && word.length()>1) {
                         Character puncMark = word.charAt(word.length()-1);
 
@@ -389,6 +399,29 @@ public class LanguageModel {
             // update the line in this.wordsByLine
             this.wordsByLine.put(i, this.words);
         }
+    }
+
+    /**
+     * Checks if the given {@param word} contains an apostrophy and if it does,
+     * it splits it. It updates the word at position p to be the substring
+     * before the apostrophy and adds after it an apostrophy and a substring
+     * of whatever was after the apostrophy.
+     *
+     * @param word {@code String} to be checked for apostrophy
+     * @param p {@code int} representing the position at which the {@param word} is
+     * @return the index {@param p}
+     */
+    private int containsApostrophy(String word, int p) {
+
+        if(word.contains("'")) {
+            String[] ws = word.split("'");
+            this.words.set(p, ws[0]);
+            this.words.add(p+1, "'");
+            this.words.add(p+2, ws[1]);
+            p += 2;
+        }
+
+        return p;
     }
 
 }
