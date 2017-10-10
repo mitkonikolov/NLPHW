@@ -24,7 +24,7 @@ public class TestPOSTagger {
         //printWordTagCount(wordTags);
         //printUnigramCount(unigramCount);
         //printWordTagCount(bigramCount);
-        //printTrigramCount(trigramCount);
+        printTrigramCount(trigramCount);
 
     }
 
