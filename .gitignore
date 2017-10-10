@@ -39,6 +39,8 @@ a1_datasets
 # IntelliJ Files
 workspace.xml
 tasks.xml
+*.idea
+*.iml
 
 # Temp notes
 *.rtf
