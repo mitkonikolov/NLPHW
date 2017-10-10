@@ -142,7 +142,14 @@ public class LanguageModel {
      * @return {@code true} ioi the given word ends with a punctuation mark
      */
     private boolean endsWithPunctuationMark(String word) {
-        Character lastChar = word.charAt(word.length() - 1);
+        Character lastChar;
+        if(word.length()==0) {
+            return false;
+        }
+        else {
+            lastChar = word.charAt(word.length() - 1);
+        }
+
         if (lastChar.equals('.') ||
                 lastChar.equals(',') ||
                 lastChar.equals('!') ||
@@ -667,6 +674,13 @@ public class LanguageModel {
     }
 
 
+    /**
+     * The {@code String} {@param word} has been seen 5 times so it needs
+     * to be changed from unknown to known.
+     *
+     * @param word the {@code String} that needs to be changed from unknown
+     *             to known
+     */
     private void changeUnkToKnown(String word) {
         // words that have been seen before word
         HashMap<String, Integer> wordsBefore = this.trigramCountsUNK.get(word);
@@ -735,7 +749,13 @@ public class LanguageModel {
     }
 
 
-    public void calculateProbabilities() {
+    /**
+     * Calculates the trigram probabilities.
+     */
+    public void calculateProbabilitiesAdd1() {
+
+        combineUNKIndCount();
+
         Set<String> allBigrams = this.trigramCounts.keySet();
 
         Iterator bigramsIter = allBigrams.iterator();
@@ -765,6 +785,8 @@ public class LanguageModel {
 
                 Double numOccurences = (double) currentNumberOfOccurences;
 
+                // c(wn|w n-2, w n-1) was added during smoothing so I need
+                // to add the vocabulary size now
                 Double probability = numOccurences / (numberOfTimesBigramOccurs + vocabularySize);
 
                 // change wordsAfter to include probabilities now
@@ -776,6 +798,10 @@ public class LanguageModel {
     }
 
 
+    /**
+     * Returns the field this.trigramProbabilities
+     * @return this.trigramProbabilities
+     */
     public HashMap<String, HashMap<String, Double>> getTrigramProbabilities() {
         return this.trigramProbabilities;
     }
@@ -838,15 +864,10 @@ public class LanguageModel {
 
             double tempR = calculatePerplexityForLine(line);
 
-/*            System.out.println("Perplexity before addition " + totalPerplexity);
-            System.out.println("tempR before addition " + tempR);*/
-
-
             totalPerplexity += tempR;
-
-//            System.out.println("Perplexity after addition " + totalPerplexity + "\n\n");
         }
 
+        // the total perplexity for all lines divided by the number of lines
         double averagePerplexity = totalPerplexity / (this.wordsByLine.size());
 
         return averagePerplexity;
@@ -864,8 +885,33 @@ public class LanguageModel {
     private double calculatePerplexityForLine(List<String> line) {
         double perplexity;
         double probabilityOfSentence = 1;
+
+        probabilityOfSentence = calculateProbabilyLine(line);
+
+        if(line.size()>0) {
+            perplexity = 1 / probabilityOfSentence;
+
+            NthRoot rootCalculator = new NthRoot();
+            perplexity = rootCalculator.nthroot(line.size(), perplexity);
+
+            return perplexity;
+        }
+        else {
+            return 0;
+        }
+
+    }
+
+
+    /**
+     * Returns the probability for the given {@code String} {@param line}
+     * @param line the {@code String} to compute probability of
+     * @return the probability of the given {@code String} {@param line}
+     */
+    private double calculateProbabilyLine(List<String> line) {
         String bigramBefore;
         String currentWord;
+        double probabilityOfSentence = 1;
 
         for(int i=1; i<line.size(); i++) {
 
@@ -889,41 +935,221 @@ public class LanguageModel {
 
             // this biagram has been seen in the training set
             if(this.trigramProbabilities.containsKey(bigramBefore)) {
-                HashMap<String, Double> wordsAfterProbabilities =
-                        this.trigramProbabilities.get(bigramBefore);
+                HashMap<String, Double> wordsAfterProbabilities = this.trigramProbabilities.get(bigramBefore);
 
                 // there is a probability for currentWord given bigramBefore
                 if(wordsAfterProbabilities.containsKey(currentWord)) {
-                    probabilityOfSentence = probabilityOfSentence *
-                            wordsAfterProbabilities.get(currentWord);
+                    probabilityOfSentence = probabilityOfSentence * wordsAfterProbabilities.get(currentWord);
                 }
-                // use the UNK probability
-                else if(wordsAfterProbabilities.containsKey("UNK")) {
-                    probabilityOfSentence = probabilityOfSentence *
-                            wordsAfterProbabilities.get("UNK");
+
+                // the word is UNK
+                else if((!this.individualCounts.containsKey(currentWord))) {
+
+                    // there has been UNK after this bigram
+                    if(wordsAfterProbabilities.containsKey("UNK")) {
+                        probabilityOfSentence = probabilityOfSentence * wordsAfterProbabilities.get("UNK");
+                    }
+
+                }
+                // the word is known, but has never been seen after this bigram
+                else {
+                    probabilityOfSentence = probabilityOfSentence * 0.001;
+                }
+            }
+            // this bigram has never been seen
+            else {
+                probabilityOfSentence = probabilityOfSentence * 0.001;
+            }
+        }
+
+        return probabilityOfSentence;
+    }
+
+
+    public void calculateProbabilitiesWithInterpolation() {
+
+        combineUNKIndCount();
+
+
+        Set<String> allBigrams = this.trigramCounts.keySet();
+
+        Iterator bigramsIter = allBigrams.iterator();
+
+        String key;
+
+        String innerKey;
+
+        int vocabularySize = this.individualCounts.size();
+
+        while(bigramsIter.hasNext()) {
+            // get the bigram key to update the values for the words after it
+            key = bigramsIter.next().toString();
+
+            HashMap<String, Integer> wordsAfter = this.trigramCounts.get(key);
+            HashMap<String, Double> probabilitiesAfter = new HashMap<>();
+
+            // how many times w(n-1) has been seen
+            int numberOfTimesBigramOccurs = calculateBigramOccurence(wordsAfter);
+
+            Set<String> allUnigrams = wordsAfter.keySet();
+            Iterator unigramIter = allUnigrams.iterator();
+
+            // the previous word before the innerKey
+            String arr[] = key.split(" ");
+            String previousWord;
+            try {
+                previousWord = arr[1];
+            }
+            catch (IndexOutOfBoundsException e) {
+                previousWord = arr[0];
+            }
+
+            while(unigramIter.hasNext()) {
+                innerKey = unigramIter.next().toString();
+                int currentNumberOfOccurences = wordsAfter.get(innerKey);
+
+                Double numOccurences = (double) currentNumberOfOccurences;
+
+                Double probability1 = numOccurences / numberOfTimesBigramOccurs;
+
+                double previousWordOccurences;
+                if(this.individualCounts.containsKey(previousWord)) {
+                    previousWordOccurences = this.individualCounts.get(previousWord);
                 }
                 else {
-                    probabilityOfSentence = probabilityOfSentence * 0.03;
+                    previousWordOccurences = this.individualCounts.get("UNK");
                 }
+                Double probability2 = numOccurences / previousWordOccurences;
+
+                double unigramOccurences;
+                if(this.individualCounts.containsKey(innerKey)) {
+                    unigramOccurences = this.individualCounts.get(innerKey);
+                }
+                else {
+                    unigramOccurences = this.individualCounts.get("UNK");
+                }
+                Double probability3 = unigramOccurences;
+
+                Double probability = (0.4 * probability1) +
+                        (0.5 * probability2) +
+                        (0.1 * probability3);
+
+                // change wordsAfter to include probabilities now
+                probabilitiesAfter.put(innerKey, probability);
             }
-            else {
-                probabilityOfSentence = probabilityOfSentence * 0.03;
-            }
 
-        }
-
-        if(line.size()>0) {
-            perplexity = 1 / probabilityOfSentence;
-
-            NthRoot rootCalculator = new NthRoot();
-            perplexity = rootCalculator.nthroot(line.size(), perplexity);
-
-            return perplexity;
-        }
-        else {
-            return 0;
+            this.trigramProbabilities.put(key, probabilitiesAfter);
         }
 
     }
+
+
+    /**
+     * Combines all words of count < 5 in individual count under UNK
+     */
+    private void combineUNKIndCount() {
+
+        this.individualCounts.put("UNK", 0);
+
+        Set<String> keys = this.individualCounts.keySet();
+
+        Iterator<String> keysIterator = this.individualCounts.keySet().iterator();
+
+        int occurences = 0;
+
+        String key;
+
+        while(keysIterator.hasNext()) {
+            key = keysIterator.next();
+
+            occurences = this.individualCounts.get(key);
+
+            if(occurences < 5) {
+                occurences += this.individualCounts.get("UNK");
+                this.individualCounts.put("UNK", occurences);
+
+                // remove the word because it is part of the UNK now
+                keysIterator.remove();
+            }
+        }
+    }
+
+
+    public void printNSentences(int n) {
+        for(int i=0; i<n; i++) {
+            String chosenWord = "<s><s>";
+            String previous = chosenWord;
+
+            System.out.print(chosenWord);
+
+            // choseWord must be different from end of sentence
+            while(!chosenWord.equals("</s>")) {
+                boolean containsApostrophy = chosenWord.contains("'");
+
+                chosenWord = chooseNewWordGiven(previous);
+
+                if(endsWithPunctuationMark(chosenWord) ||
+                        chosenWord.equals("'") ||
+                        containsApostrophy) {
+                    System.out.print(chosenWord);
+                }
+                else {
+                    System.out.print(" " + chosenWord);
+                }
+
+                // this is the second word
+                if(previous.equals("<s><s>")) {
+                    previous = "<s> " + chosenWord;
+                }
+                else {
+                    String arr[] = previous.split(" ");
+                    if(arr.length>1) {
+                        previous = arr[1];
+                    }
+                    else {
+                        previous = arr[0];
+                    }
+                    previous = previous + " " + chosenWord;
+                }
+            }
+
+            System.out.println();
+        }
+    }
+
+
+    private String chooseNewWordGiven(String previous) {
+        if(this.trigramProbabilities.containsKey(previous)) {
+            HashMap<String, Double> possibleWords = this.trigramProbabilities.get(previous);
+
+            String word;
+            String newChosenWord = "</s>";
+
+            Set<String> keys = possibleWords.keySet();
+
+            Iterator i = keys.iterator();
+
+            Random r = new Random();
+            int bound = r.nextInt(40);
+            int step = r.nextInt(5);
+
+            int p = 0;
+
+            while ((p<bound) && i.hasNext()) {
+
+                newChosenWord = i.next().toString();
+                p += step;
+            }
+
+            if(newChosenWord.equals("UNK")) {
+                newChosenWord = "</s>";
+            }
+            return newChosenWord;
+        }
+        else {
+            return "</s>";
+        }
+    }
+
 
 }
