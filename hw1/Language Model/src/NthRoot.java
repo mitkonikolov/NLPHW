@@ -1,8 +1,7 @@
 /**
- ** Java Program to implement Nth Root Algorithm
+ ** Java Program to implement Nth Root Algorithm.
+ *  This code was copied from http://www.sanfoundry.com/java-program-nth-root-algorithm/
  **/
-
-import java.util.Scanner;
 
 /** Class NthRoot **/
 public class NthRoot

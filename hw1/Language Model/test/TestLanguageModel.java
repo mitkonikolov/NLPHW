@@ -794,6 +794,15 @@ public class TestLanguageModel {
         line41.add(".");
         line41.add("</s>");
 
+        List<String> line42 = new ArrayList<>();
+        line42.add("<s><s>");
+        line42.add("those");
+        line42.add("are");
+        line42.add("funny");
+        line42.add("labels");
+        line42.add(",");
+        line42.add(".");
+
         HashMap<Integer, List<String>> expected = new HashMap<>();
         expected.put(0, line1);
         expected.put(1, line2);
@@ -836,10 +845,49 @@ public class TestLanguageModel {
         expected.put(38, line39);
         expected.put(39, line40);
         expected.put(40, line41);
+        expected.put(41, line42);
 
         this.compareLists(r, expected);
 
     }
+
+
+
+    @Test
+    public void testFinishProcessingWords3() {
+        LanguageModel lm = new LanguageModel("train_set11.csv");
+
+        lm.parseTrainingSet();
+        lm.remExtraChars();
+        lm.finishProcessingWords();
+
+        HashMap<Integer, List<String>> r = lm.getWordsByLine();
+
+        List<String> line1 = new ArrayList<>();
+        line1.add("<s><s>");
+        line1.add("yeah");
+        line1.add(",");
+        line1.add("</s>");
+
+        List<String> line2 = new ArrayList<>();
+        line2.add("<s><s>");
+        line2.add("those");
+        line2.add("are");
+        line2.add("funny");
+        line2.add("labels");
+        line2.add(",");
+        line2.add("see");
+        line2.add(".");
+        line2.add("</s>");
+
+
+        HashMap<Integer, List<String>> expected = new HashMap<>();
+        expected.put(0, line1);
+        expected.put(1, line2);
+
+        this.compareLists(r, expected);
+    }
+
 
 
     private void compareLists(HashMap<Integer, List<String>> r,
@@ -853,7 +901,6 @@ public class TestLanguageModel {
 
             for(int p = 0; p<actualLine.size(); p++) {
                 System.out.println(actualLine.get(p));
-                System.out.println(expectedLine.get(p));
                 assertEquals(expectedLine.get(p), actualLine.get(p));
             }
         }
@@ -1090,9 +1137,9 @@ public class TestLanguageModel {
         lm.add1Smoothing();
         lm.calculateProbabilities();
 
-        System.out.println("starting perplexity calc");
+        String testSet = "test_set.csv";
 
-        System.out.println(lm.calculatePerplexity("test_set.csv"));
+        System.out.println("Perplexity for " + testSet + ": " + lm.calculatePerplexity(testSet));
 
 
     }
