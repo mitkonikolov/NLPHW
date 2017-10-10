@@ -1,14 +1,22 @@
 import java.io.File;
 import java.io.FileNotFoundException;
 import java.util.HashMap;
+import java.util.Iterator;
 import java.util.Scanner;
+import java.util.Set;
 
 /**
  * Created by Mitko on 10/10/17.
  */
 public class POSTagger {
 
-    // how many times does the tag X occur
+    // how many times total have I seen the tag X
+    private HashMap<String, Integer> tagCount;
+
+    // how many times total have I seen word X
+    private HashMap<String, Integer> wordCount;
+
+    // how many times have I seen the unigram X
     private HashMap<String, Integer> unigramCount;
 
     // how many times have I seen tag X after tag Y 
@@ -26,6 +34,8 @@ public class POSTagger {
     private String fileName;
 
     public POSTagger() {
+        this.wordCount = new HashMap<>();
+        this.tagCount = new HashMap<>();
         this.unigramCount = new HashMap<>();
         this.wordTagCount = new HashMap<>();
         this.bigramTagCount = new HashMap<>();
@@ -34,6 +44,8 @@ public class POSTagger {
     }
 
     public POSTagger(String fName) {
+        this.wordCount = new HashMap<>();
+        this.tagCount = new HashMap<>();
         this.unigramCount = new HashMap<>();
         this.wordTagCount = new HashMap<>();
         this.bigramTagCount = new HashMap<>();
@@ -87,6 +99,22 @@ public class POSTagger {
         String tag = s.next();
         String word = s.next();
 
+        // Update tagCount
+        // tagCount contains tag
+        if(this.tagCount.containsKey(tag)) {
+            this.tagCount.put(tag, (this.tagCount.get(tag) + numOccurences));
+        }
+        // tag is seen for the first time
+        else {
+            this.tagCount.put(tag, numOccurences);
+        }
+
+
+        // Update wordCount
+        updateWordCount(word);
+
+
+
         // update the tags for this word
         if(this.wordTagCount.containsKey(word)) {
             HashMap<String, Integer> tags = this.wordTagCount.get(word);
@@ -113,6 +141,47 @@ public class POSTagger {
     }
 
 
+    private void updateWordCount(String word) {
+        // wordCount contains word
+        if(this.wordCount.containsKey(word)) {
+            int wordOccurences = this.wordCount.get(word);
+
+            // remove from class RARE
+            if(wordOccurences == 4) {
+                wordOccurences += 1;
+                this.wordCount.put(word, wordOccurences);
+                this.wordCount.put("RARE", (this.wordCount.get("RARE") - 4));
+            }
+            // the word should stay in class RARE for now
+            else if(wordOccurences < 4) {
+                wordOccurences += 1;
+                this.wordCount.put(word, wordOccurences);
+                this.wordCount.put("RARE", (this.wordCount.get("RARE") + 1));
+            }
+            // the word occurs 5 or more times and has already been removed
+            // from the RARE class
+            else {
+                this.wordCount.put(word, this.wordCount.get(word)+1);
+            }
+        }
+        // the word is not present so it will be counted both as
+        // itself and as RARE for now
+        else {
+            // count the word as it is too
+            this.wordCount.put(word, 1);
+
+            // increment the RARE class
+            if(this.wordCount.containsKey("RARE")) {
+                this.wordCount.put("RARE", (this.wordCount.get("RARE")+1));
+            }
+            // start the RARE class
+            else {
+                this.wordCount.put("RARE", 1);
+            }
+        }
+    }
+
+
     public HashMap<String, HashMap<String, Integer>> getWordTagCount() {
         return this.wordTagCount;
     }
@@ -130,6 +199,9 @@ public class POSTagger {
             this.unigramCount.put(tag, numOccurences);
         }
     }
+
+
+
 
 
     public HashMap<String, Integer> getUnigramCount() {
@@ -224,6 +296,118 @@ public class POSTagger {
 
 
     public HashMap<String, HashMap<String, HashMap<String, Integer>>> getTrigramCount() {
+
         return this.trigramTagCount;
     }
+
+
+    /**
+     * Calculates the probability that {@param word} is marked with {@param tag}
+     * @param word
+     * @param tag
+     * @return
+     */
+    public double calculateEmissionProbability(String word, String tag) {
+        int countTagForWord = 0;
+
+        // this word has been seen
+        if(this.wordTagCount.containsKey(word)) {
+            HashMap<String, Integer> tagsForWord = this.wordTagCount.get(word);
+
+            // this tag has been seen after the word
+            if(tagsForWord.containsKey(tag)) {
+                countTagForWord = tagsForWord.get(tag);
+            }
+        }
+        else {
+            // treat the word as RARE and see how many times RARE
+            // has been see
+            if(this.wordCount.containsKey("RARE")) {
+                countTagForWord = this.wordCount.get("RARE");
+            }
+        }
+
+        int countTagOccurence = 0;
+
+        // this tag has been seen
+        if(this.tagCount.containsKey(tag)) {
+            countTagOccurence = this.tagCount.get(tag);
+        }
+
+        if(countTagOccurence!=0) {
+            double res = (double)countTagForWord;
+            res = res / countTagOccurence;
+            return res;
+        }
+        else {
+            return 0;
+        }
+    }
+
+
+    public HashMap<String, Integer> getTagCount() {
+        return this.tagCount;
+    }
+
+
+    /**
+     * Calculates the probability that {@param tag2} comes after {@param tag1}.
+     *
+     * @param tag2
+     * @param tag1
+     * @return
+     */
+    public double calculateTransitionProbability(String tag2, String tag1) {
+        int occurencesOfT1T2 = 0;
+
+        // tag1 has been seen
+        if(this.bigramTagCount.containsKey(tag1)) {
+            HashMap<String, Integer> tagsAfterTag1 = this.bigramTagCount.get(tag1);
+
+            // tag2 has been seen after tag1
+            if(tagsAfterTag1.containsKey(tag2)) {
+                occurencesOfT1T2 = tagsAfterTag1.get(tag2);
+            }
+        }
+
+        int occurenceTag1 = 0;
+
+        occurenceTag1 = calculateBigramTagOccurence(tag1);
+
+        if(occurenceTag1!=0) {
+            double res = occurencesOfT1T2;
+            res = res / occurenceTag1;
+            return res;
+        }
+        else {
+            return 0;
+        }
+    }
+
+
+
+    private int calculateBigramTagOccurence(String tag) {
+        int occurences = 0;
+
+        if(this.bigramTagCount.containsKey(tag)) {
+            HashMap<String, Integer> tagsAfter = this.bigramTagCount.get(tag);
+
+            Set<String> tags = tagsAfter.keySet();
+            Iterator<String> tagsIter = tags.iterator();
+            String tagAfter;
+
+            while(tagsIter.hasNext()) {
+                tagAfter = tagsIter.next();
+
+                occurences += tagsAfter.get(tagAfter);
+            }
+
+            return occurences;
+        }
+        else {
+            return 0;
+        }
+    }
+
+
 }

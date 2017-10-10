@@ -16,15 +16,22 @@ public class TestPOSTagger {
 
         ptagger.parseFile();
 
+        HashMap<String, Integer> tagCount = ptagger.getTagCount();
         HashMap<String, HashMap<String, Integer>> wordTags = ptagger.getWordTagCount();
         HashMap<String, Integer> unigramCount = ptagger.getUnigramCount();
         HashMap<String, HashMap<String, Integer>> bigramCount = ptagger.getBigramTagCount();
         HashMap<String, HashMap<String, HashMap<String, Integer>>> trigramCount = ptagger.getTrigramCount();
 
+        //printUnigramCount(tagCount);
         //printWordTagCount(wordTags);
         //printUnigramCount(unigramCount);
         //printWordTagCount(bigramCount);
-        printTrigramCount(trigramCount);
+        //printTrigramCount(trigramCount);
+
+        double emProb = ptagger.calculateEmissionProbability("teams", "NOUN");
+        System.out.println(emProb);
+        double transProb = ptagger.calculateTransitionProbability("NOUN", "PART");
+        System.out.println(transProb);
 
     }
 
