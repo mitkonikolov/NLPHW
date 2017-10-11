@@ -10,6 +10,9 @@ public class Solution {
         // and transition probabilities necessary for POS tagging
         posTagger.parseFile();
 
+        posTagger.calcSetEmissionProb();
+        posTagger.calcSetTransProb();
+
         // reads the file test.words, generates the POS tags for all
         // words and saves them into a file called test.tags
         posTagger.generateAllPOSTags();

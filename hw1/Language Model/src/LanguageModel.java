@@ -20,6 +20,7 @@ public class LanguageModel {
     // trigram count for words currently unknown.
     // Format: <word> ---seen after---> (words, count)
     private HashMap<String, HashMap<String, Integer>> trigramCountsUNK;
+    private int mode;
     private HashMap<String, HashMap<String, Double>> trigramProbabilities;
 
     public LanguageModel() {
@@ -29,7 +30,9 @@ public class LanguageModel {
         this.individualCounts = new HashMap<>();
         this.trigramCounts = new HashMap<>();
         this.trigramCountsUNK = new HashMap<>();
+        this.mode = 0;
         this.trigramProbabilities = new HashMap<>();
+
     }
 
     public LanguageModel(String trainingSetName) {
@@ -39,6 +42,7 @@ public class LanguageModel {
         this.individualCounts = new HashMap<>();
         this.trigramCounts = new HashMap<>();
         this.trigramCountsUNK = new HashMap<>();
+        this.mode = 0;
         this.trigramProbabilities = new HashMap<>();
     }
 
@@ -867,6 +871,10 @@ public class LanguageModel {
             totalPerplexity += tempR;
         }
 
+        if(mode==2) {
+            totalPerplexity *= 100;
+        }
+
         // the total perplexity for all lines divided by the number of lines
         double averagePerplexity = totalPerplexity / (this.wordsByLine.size());
 
@@ -1006,6 +1014,7 @@ public class LanguageModel {
 
             while(unigramIter.hasNext()) {
                 innerKey = unigramIter.next().toString();
+                mode = 2;
                 int currentNumberOfOccurences = wordsAfter.get(innerKey);
 
                 Double numOccurences = (double) currentNumberOfOccurences;
@@ -1030,8 +1039,8 @@ public class LanguageModel {
                 }
                 Double probability3 = unigramOccurences;
 
-                Double probability = (0.4 * probability1) +
-                        (0.5 * probability2) +
+                Double probability = (0.5 * probability1) +
+                        (0.4 * probability2) +
                         (0.1 * probability3);
 
                 // change wordsAfter to include probabilities now
