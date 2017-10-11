@@ -12,27 +12,33 @@ public class TestPOSTagger {
 
     @Test
     public void testParsing() {
-        POSTagger ptagger = new POSTagger("train2.counts");
+        POSTagger ptagger = new POSTagger("train.counts");
 
         ptagger.parseFile();
 
         HashMap<String, Integer> tagCount = ptagger.getTagCount();
+        HashMap<String, Integer> wordCount = ptagger.getWordCount();
         HashMap<String, HashMap<String, Integer>> wordTags = ptagger.getWordTagCount();
         HashMap<String, Integer> unigramCount = ptagger.getUnigramCount();
         HashMap<String, HashMap<String, Integer>> bigramCount = ptagger.getBigramTagCount();
         HashMap<String, HashMap<String, HashMap<String, Integer>>> trigramCount = ptagger.getTrigramCount();
 
         //printUnigramCount(tagCount);
+        //printUnigramCount(wordCount);
         //printWordTagCount(wordTags);
         //printUnigramCount(unigramCount);
         //printWordTagCount(bigramCount);
         //printTrigramCount(trigramCount);
 
         double emProb = ptagger.calculateEmissionProbability("teams", "NOUN");
-        System.out.println(emProb);
-        double transProb = ptagger.calculateTransitionProbability("NOUN", "PART");
-        System.out.println(transProb);
+        //System.out.println(emProb);
 
+        ptagger.calcSetEmissionProb();
+        HashMap<String, HashMap<String, Double>> setEmProb = ptagger.getSetEmissionProbs();
+        //printSetEmissionProbs(setEmProb);
+
+        double transProb = ptagger.calculateTransitionProbability("NOUN", "*");
+        //System.out.println(transProb);
     }
 
 
@@ -56,6 +62,34 @@ public class TestPOSTagger {
 
                 System.out.println(tags.get(t));
             }
+
+            System.out.println();
+        }
+    }
+
+
+    private void printSetEmissionProbs(HashMap<String, HashMap<String, Double>> wordTagsProbs) {
+        Set<String> words = wordTagsProbs.keySet();
+
+        Iterator<String> wordsIter = words.iterator();
+
+        while(wordsIter.hasNext()) {
+            String word = wordsIter.next();
+            System.out.println(word);
+
+            HashMap<String, Double> tags = wordTagsProbs.get(word);
+
+            Set<String> allTags = tags.keySet();
+            Iterator<String> tagIter = allTags.iterator();
+
+            while(tagIter.hasNext()) {
+                String t = tagIter.next();
+                System.out.println(t);
+
+                System.out.println(tags.get(t));
+            }
+
+            System.out.println();
         }
     }
 
