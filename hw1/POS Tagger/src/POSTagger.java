@@ -1,13 +1,14 @@
-import java.io.File;
-import java.io.FileNotFoundException;
+import java.io.*;
 import java.util.*;
+import java.util.regex.Pattern;
 
 /**
  * Created by Mitko on 10/10/17.
  */
 public class POSTagger {
 
-    private String fileName; // the name of the file to be parsed
+    private String fileName; // the name of the file to be parsed for training
+    private String testFileName; // name of file to be used for parsing
     private HashMap<String, Integer> tagCount; // how many times total have I seen the tag X
 
     // how many times total the word X occurs.
@@ -22,9 +23,20 @@ public class POSTagger {
     // emission probabilities stored in format "USA -> (Noun, 0.84)
     private HashMap<String, HashMap<String, Double>> emissionProbs;
 
+    // transition probabilities stored in format "NOUN -> (ADJ, 0.03)"
+    // where 0.03 is the probability of ADJ coming adter NOUN
+    private HashMap<String, HashMap<String, Double>> transProbs;
+
 
     private HashMap<String, Integer> unigramCount; // how many times have I seen the unigram X
-    private HashMap<String, HashMap<String, Integer>> bigramTagCount; // how many times have I seen tag X after tag Y 
+
+    // how many times have I seen tag X after tag Y 
+    // stored in the format X -> (Y -> Integer)
+    private HashMap<String, HashMap<String, Integer>> bigramTagCount;
+
+    // Used for Viterbi algo
+    private String previousTag; // the tag that was last chosen
+    private double probabilityUpToNow; // the probability up to previous tag
 
     // how many times have I seen tag X after tags Y  Z
     private HashMap<String, HashMap<String, HashMap<String, Integer>>> trigramTagCount;
@@ -35,9 +47,13 @@ public class POSTagger {
         this.unigramCount = new HashMap<>();
         this.wordTagCount = new HashMap<>();
         this.emissionProbs = new HashMap<>();
+        this.transProbs = new HashMap<>();
         this.bigramTagCount = new HashMap<>();
+        this.previousTag = "*";
+        this.probabilityUpToNow = 1.0;
         this.trigramTagCount = new HashMap<>();
         this.fileName = "train.counts";
+        this.testFileName = "test.words";
     }
 
     public POSTagger(String fName) {
@@ -46,9 +62,28 @@ public class POSTagger {
         this.unigramCount = new HashMap<>();
         this.wordTagCount = new HashMap<>();
         this.emissionProbs = new HashMap<>();
+        this.transProbs = new HashMap<>();
         this.bigramTagCount = new HashMap<>();
+        this.previousTag = "*";
+        this.probabilityUpToNow = 1.0;
         this.trigramTagCount = new HashMap<>();
         this.fileName = fName;
+        this.testFileName = "test.words";
+    }
+
+    public POSTagger(String fName, String testFileName) {
+        this.wordCount = new HashMap<>();
+        this.tagCount = new HashMap<>();
+        this.unigramCount = new HashMap<>();
+        this.wordTagCount = new HashMap<>();
+        this.emissionProbs = new HashMap<>();
+        this.transProbs = new HashMap<>();
+        this.bigramTagCount = new HashMap<>();
+        this.previousTag = "*";
+        this.probabilityUpToNow = 1.0;
+        this.trigramTagCount = new HashMap<>();
+        this.fileName = fName;
+        this.testFileName = testFileName;
     }
 
 
@@ -272,7 +307,7 @@ public class POSTagger {
 
 
     /**
-     * Calculates the emission probability on the whole train set.
+     * Calculates the emission probability on the whole train emissionProbs.
      * It iterates through this.wordTagCount, calculates the emission
      * probabilities for each combination of word and tag, and stores
      * them into this.emissionProbs.
@@ -404,6 +439,58 @@ public class POSTagger {
 
 
     /**
+     * Uses this.bigramTagCount to calculate the probability of each tag Y
+     * coming after tag X and stores it into this.transProbs
+     */
+    public void calcSetTransProb() {
+        Set<String> tags = this.bigramTagCount.keySet();
+        Iterator<String> tagsIter = tags.iterator();
+        String tag1;
+        double transProb;
+
+        while(tagsIter.hasNext()) {
+            tag1 = tagsIter.next();
+
+            HashMap<String, Integer> countTagsAfter = this.bigramTagCount.get(tag1);
+            Set<String> tagsAfter = countTagsAfter.keySet();
+            Iterator<String> tagsAfterIter = tagsAfter.iterator();
+            String tag2;
+
+            while(tagsAfterIter.hasNext()) {
+                tag2 = tagsAfterIter.next();
+                transProb = calculateTransitionProbability(tag2, tag1);
+                inputTransProbInMap(tag1, tag2, transProb);
+            }
+        }
+    }
+
+
+    /**
+     * Inputs the probability {@param transProb} that {@param tag2} comes after
+     * {@param tag1} into the field this.transProbs.
+     *
+     * @param tag1 the tag before {@param tag2}
+     * @param tag2 the tag after {@param tag1}
+     * @param transProb the probability of {@param tag2} comes after
+     *                  {@param tag1}
+     */
+    public void inputTransProbInMap(String tag1, String tag2, double transProb) {
+        HashMap<String, Double> tagsAfterProbs;
+
+        if(this.transProbs.containsKey(tag1)) {
+            tagsAfterProbs = this.transProbs.get(tag1);
+        }
+        // tag1 has not been seen as the first tag yet
+        else {
+            tagsAfterProbs = new HashMap<>();
+        }
+
+        tagsAfterProbs.put(tag2, transProb);
+        this.transProbs.put(tag1, tagsAfterProbs);
+    }
+
+
+    /**
      * Calculates the probability that {@param tag2} comes after {@param tag1}.
      *
      * @param tag2 the second tag
@@ -438,7 +525,7 @@ public class POSTagger {
 
     /**
      * It calculates how many times the {@param tag} has occurred before
-     * any other tag in a bigram from the train set.
+     * any other tag in a bigram from the train emissionProbs.
      *
      * @param tag the tag to calculate total occurrences of
      * @return the total number of times the tag {@param tag} has occurred
@@ -461,6 +548,134 @@ public class POSTagger {
             }
 
             return occurences;
+        }
+        else {
+            return 0;
+        }
+    }
+
+
+    /**
+     * It opens a test file and stores all POS tags in it in the format
+     * <word> <tag>
+     */
+    public void generateAllPOSTags() {
+        File f = new File(this.testFileName);
+
+        try {
+            PrintWriter writer = new PrintWriter("test.tags", "UTF-8");
+
+
+            String word;
+
+            try {
+                Scanner s = new Scanner(f);
+
+
+                while(s.hasNextLine()) {
+
+                    //System.out.println("\nNew sentence:");
+
+                    word = s.nextLine();
+
+                    while(!word.equals("") && s.hasNextLine()) {
+
+                        generatePOSTag(word);
+
+                        writer.println(word + " " + this.previousTag);
+
+                        word = s.nextLine();
+                    }
+
+                    if(s.hasNextLine()) {
+                        writer.println();
+                    }
+                    else {
+                        writer.close();
+                    }
+
+                    // previousTag and probabilityUtToNow are updated for
+                    // the next sentence
+                    this.previousTag = "*";
+                    this.probabilityUpToNow = 1.0;
+
+                }
+            } catch (FileNotFoundException e) {
+                e.printStackTrace();
+            }
+
+
+        } catch (FileNotFoundException e) {
+            e.printStackTrace();
+        } catch (UnsupportedEncodingException e) {
+            e.printStackTrace();
+        }
+
+    }
+
+
+    /**
+     * It finds the most probable POS tag for the {@param word}
+     * and it becomes this.previousTag which also results in an
+     * update on this.probabilityUpToNow
+     *
+     * @param word {@code String} to compute POS tags for
+     */
+    public void generatePOSTag(String word) {
+        HashMap<String, Double> allPossibleTags;
+        double transitionProbability;
+        double emissionProbability;
+
+        double currentBestProb = 0;
+        String currentBestTag = "";
+
+        if(this.emissionProbs.containsKey(word)) {
+            allPossibleTags = this.emissionProbs.get(word);
+        }
+        // the RARE class will be used
+        else {
+            allPossibleTags = this.emissionProbs.get("RARE");
+        }
+
+        Set<String> allTags = allPossibleTags.keySet();
+        Iterator<String> allTagsIter = allTags.iterator();
+        String possibleTag;
+
+        while(allTagsIter.hasNext()) {
+            possibleTag = allTagsIter.next();
+            transitionProbability = getTransitionProbability(possibleTag, this.previousTag);
+            transitionProbability = transitionProbability * this.probabilityUpToNow;
+            emissionProbability = allPossibleTags.get(possibleTag);
+
+            if((transitionProbability * emissionProbability) > currentBestProb) {
+                currentBestProb = (transitionProbability * emissionProbability);
+                currentBestTag = possibleTag;
+            }
+        }
+
+        this.previousTag = currentBestTag;
+        this.probabilityUpToNow = currentBestProb;
+    }
+
+
+    /**
+     * Using this.transProbs, it checks what is the probability of tag2 coming
+     * after tag1.
+     * @param tag2 a POS tag
+     * @param tag1 a POS tag
+     * @return the probability of {@param tag2} coming after {@param tag1}
+     */
+    public double getTransitionProbability(String tag2, String tag1) {
+
+        if(this.transProbs.containsKey(tag1)) {
+            HashMap<String, Double> tagsAfter = this.transProbs.get(tag1);
+
+            if(tagsAfter.containsKey(tag2)) {
+                return tagsAfter.get(tag2);
+            }
+            else {
+                return 0;
+            }
         }
         else {
             return 0;
@@ -538,34 +753,32 @@ public class POSTagger {
         return this.unigramCount;
     }
 
-
     public HashMap<String, HashMap<String, Integer>> getBigramTagCount() {
         return this.bigramTagCount;
     }
-
 
     public HashMap<String, HashMap<String, HashMap<String, Integer>>> getTrigramCount() {
 
         return this.trigramTagCount;
     }
 
-
     public HashMap<String, Integer> getTagCount() {
         return this.tagCount;
     }
-
 
     public HashMap<String, Integer> getWordCount() {
         return this.wordCount;
     }
 
-
     public HashMap<String, HashMap<String, Integer>> getWordTagCount() {
         return this.wordTagCount;
     }
 
-
     public HashMap<String, HashMap<String, Double>> getSetEmissionProbs() {
         return this.emissionProbs;
+    }
+
+    public HashMap<String, HashMap<String, Double>> getTransProbs() {
+        return this.transProbs;
     }
 }

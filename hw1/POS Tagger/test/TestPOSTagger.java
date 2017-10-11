@@ -35,10 +35,17 @@ public class TestPOSTagger {
 
         ptagger.calcSetEmissionProb();
         HashMap<String, HashMap<String, Double>> setEmProb = ptagger.getSetEmissionProbs();
-        //printSetEmissionProbs(setEmProb);
+        //printSetProbs(setEmProb);
 
-        double transProb = ptagger.calculateTransitionProbability("NOUN", "*");
+        double transProb = ptagger.calculateTransitionProbability("VERB", "PART");
         //System.out.println(transProb);
+
+        ptagger.calcSetTransProb();
+        HashMap<String, HashMap<String, Double>> setTransProb = ptagger.getTransProbs();
+        //printSetProbs(setTransProb);
+
+        //ptagger.generatePOSTag("I");
+        ptagger.generateAllPOSTags();
     }
 
 
@@ -68,7 +75,7 @@ public class TestPOSTagger {
     }
 
 
-    private void printSetEmissionProbs(HashMap<String, HashMap<String, Double>> wordTagsProbs) {
+    private void printSetProbs(HashMap<String, HashMap<String, Double>> wordTagsProbs) {
         Set<String> words = wordTagsProbs.keySet();
 
         Iterator<String> wordsIter = words.iterator();
