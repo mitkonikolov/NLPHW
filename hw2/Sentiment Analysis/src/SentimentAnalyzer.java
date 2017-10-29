@@ -219,7 +219,7 @@ public class SentimentAnalyzer {
             }
         }
         catch (FileNotFoundException e) {
-
+            System.out.println("File was not found");
         }
     }
 
@@ -252,7 +252,9 @@ public class SentimentAnalyzer {
         File[] files = f.listFiles();
 
         for(int i=0; i<files.length; i++) {
+            // calculate the probability of files[i] being positive
             calcProbPos(files[i].getName(), loc);
+            // calculate the probability of files[i] being positive
             calcProbNeg(files[i].getName(), loc);
             if(probPositive.compareTo(probNegative) > 0) {
                 // true positive
@@ -277,15 +279,22 @@ public class SentimentAnalyzer {
         }
     }
 
-    public void analyzeCalcMetrics() {
+    public void analyzeCalcMetrics(int posOrNeg) {
         // analyze pos
         analyze(1);
         // analyze neg
         analyze(-1);
 
-        this.precision = (double)this.truePositive / (this.truePositive + this.falsePositive);
-        this.recall = (double)this.truePositive / (this.truePositive + this.falseNegative);
-        this.f1 = 2*this.precision*this.recall /
+        if(posOrNeg>0) {
+            this.precision = (double) this.truePositive / (this.truePositive + this.falsePositive);
+            this.recall = (double) this.truePositive / (this.truePositive + this.falseNegative);
+        }
+        else {
+            this.precision = (double) this.trueNegative / (this.trueNegative + this.falseNegative);
+            this.recall = (double) this.trueNegative / (this.trueNegative + this.falsePositive);
+        }
+
+        this.f1 = 2 * this.precision * this.recall /
                 (this.precision + this.recall);
 
     }
