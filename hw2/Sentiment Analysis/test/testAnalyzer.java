@@ -53,10 +53,20 @@ public class testAnalyzer {
     }
 
     @Test
-    public void testAnalyzeCalcMetrics() {
+    public void testAnalyzeCalcMetricsPos() {
         SentimentAnalyzer analyzer = new SentimentAnalyzer();
 
-        analyzer.analyzeCalcMetrics();
+        analyzer.analyzeCalcMetrics(1);
+        System.out.println(analyzer.getPrecision());
+        System.out.println(analyzer.getRecall());
+        System.out.println(analyzer.getF1());
+    }
+
+    @Test
+    public void testAnalyzeCalcMetricsNeg() {
+        SentimentAnalyzer analyzer = new SentimentAnalyzer();
+
+        analyzer.analyzeCalcMetrics(-1);
         System.out.println(analyzer.getPrecision());
         System.out.println(analyzer.getRecall());
         System.out.println(analyzer.getF1());
