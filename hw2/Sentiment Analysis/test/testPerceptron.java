@@ -36,7 +36,7 @@ public class testPerceptron {
     @Test
     public void testPerceptron5() {
         MultilayerPerceptronAnalyzer perceptron = new MultilayerPerceptronAnalyzer(5);
-        System.out.println("Perceptron with 5 hidden layers");
+        System.out.println("Perceptron with increased training time and learning rate");
         perceptron.parse(1);
     }
 

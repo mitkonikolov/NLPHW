@@ -1,18 +1,12 @@
 import weka.classifiers.Evaluation;
-import weka.classifiers.evaluation.ThresholdCurve;
 import weka.classifiers.functions.MultilayerPerceptron;
-import weka.core.Instance;
 import weka.core.Instances;
-import weka.core.converters.ConverterUtils;
 import weka.core.converters.TextDirectoryLoader;
 import weka.filters.Filter;
 import weka.filters.unsupervised.attribute.StringToWordVector;
 
 import java.io.File;
-import java.io.FileNotFoundException;
-import java.io.FileReader;
 import java.io.IOException;
-import java.util.Scanner;
 
 /**
  * Created by Mitko on 10/29/17.
@@ -68,12 +62,10 @@ public class MultilayerPerceptronAnalyzer {
         File[] files;
         if(classType>0) {
             f = new File("files/train/pos");
-            //f = new File("files/mytest/pos");
             files = f.listFiles();
         }
         else {
             f = new File("files/train/neg");
-            //f = new File("files/mytest/neg");
             files = f.listFiles();
         }
 
@@ -101,10 +93,12 @@ public class MultilayerPerceptronAnalyzer {
             eval.evaluateModel(mperc, dataFiltered);
 
             // Negative
-            System.out.println("Data for Negative Class:");
+            System.out.println("\nData for Negative Class:");
             System.out.println("Precision: " + eval.precision(0));
             System.out.println("Recall: " + eval.recall(0));
             System.out.println("FMeasure: " + eval.fMeasure(0));
+
+            System.out.println("\n");
 
             // Positive
             System.out.println("Data for Positive Class:");
@@ -112,7 +106,7 @@ public class MultilayerPerceptronAnalyzer {
             System.out.println("Recall: " + eval.recall(1));
             System.out.println("FMeasure: " + eval.fMeasure(1));
 
-            System.out.println("\n");
+            System.out.println("\n\n\n");
         }
         catch (IOException e) {
             e.printStackTrace();
