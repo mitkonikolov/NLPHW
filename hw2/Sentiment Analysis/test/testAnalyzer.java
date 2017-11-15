@@ -49,26 +49,29 @@ public class testAnalyzer {
     @Test
     public void testAnalyze() {
         SentimentAnalyzer analyzer = new SentimentAnalyzer();
+        analyzer.parse();
         analyzer.analyze(1);
     }
 
     @Test
     public void testAnalyzeCalcMetricsPos() {
         SentimentAnalyzer analyzer = new SentimentAnalyzer();
+        analyzer.parse();
 
         analyzer.analyzeCalcMetrics(1);
-        System.out.println(analyzer.getPrecision());
-        System.out.println(analyzer.getRecall());
-        System.out.println(analyzer.getF1());
+        System.out.println("Precision is: " + analyzer.getPrecision());
+        System.out.println("Recall is: " + analyzer.getRecall());
+        System.out.println("F1 is: " + analyzer.getF1());
     }
 
     @Test
     public void testAnalyzeCalcMetricsNeg() {
         SentimentAnalyzer analyzer = new SentimentAnalyzer();
+        analyzer.parse();
 
         analyzer.analyzeCalcMetrics(-1);
-        System.out.println(analyzer.getPrecision());
-        System.out.println(analyzer.getRecall());
-        System.out.println(analyzer.getF1());
+        System.out.println("Precision is: " + analyzer.getPrecision());
+        System.out.println("Recall is: " + analyzer.getRecall());
+        System.out.println("F1 is: " + analyzer.getF1());
     }
 }

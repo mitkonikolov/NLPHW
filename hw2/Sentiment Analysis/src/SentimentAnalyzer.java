@@ -1,5 +1,7 @@
 import java.io.File;
 import java.io.FileNotFoundException;
+import java.io.PrintWriter;
+import java.io.UnsupportedEncodingException;
 import java.math.BigDecimal;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -131,6 +133,15 @@ public class SentimentAnalyzer {
     }
 
 
+    /**
+     * Updates the number of times {@param word} has been seen.
+     * It updates a positive bag of words or a negative one depending on
+     * whether {@param mode} was positive or negative.
+     *
+     * @param word the {@code String} whose value needs to be updated
+     * @param mode indicates whether the positive or the negative bag of
+     *             words needs to be updated
+     */
     private void putInBag(String word, int mode) {
         // update positive bag of words
         if(mode>0) {
@@ -153,6 +164,20 @@ public class SentimentAnalyzer {
     }
 
 
+    /**
+     * It opens the file named {@param fileName} and calculates the probability
+     * that it is of type pos or neg if {@param classType} is a positive or
+     * negative number respectively.
+     *
+     * @param classType if it is a positive number, then the probability of
+     *                  {@param fileName} being positive is calculated, otherwise
+     *                  the method calculates the probability of {@param fileName}
+     *                  being negative
+     * @param fileName the files named in this string needs to be classified
+     * @param fileLoc this helps for parsing the files - if it is positive, then
+     *                the file is located in pos and if it's negative, it is in
+     *                neg
+     */
     private void calcProb(int classType, String fileName, int fileLoc) {
         File f;
         if(fileLoc>0) {
@@ -167,14 +192,11 @@ public class SentimentAnalyzer {
         int allWordsInClass;
         try {
             if (classType > 0) {
-
-//                f = new File("files/mytest/test/1.txt");
                 prob = BigDecimal.valueOf((double) numPositiveDocs /
                         (numPositiveDocs + numNegativeDocs));
                 bag = this.bagOfWordsPositive;
                 allWordsInClass = this.allPositiveWords;
             } else {
-//                f = new File("files/mytest/test/1.txt");
                 prob = BigDecimal.valueOf((double) numNegativeDocs /
                         (numPositiveDocs + numNegativeDocs));
                 bag = this.bagOfWordsNegative;
@@ -234,56 +256,90 @@ public class SentimentAnalyzer {
     }
 
 
+    /**
+     * This is my main evaluation code in my Naive Bayes Classifier. Based on
+     * whether the number {@param classType} is positive or negative it goes
+     * through the directory files/test/pos or files/test/neg. It calls the
+     * method {@code calcProbPos(String fileName, int location)} or the method
+     * {@code calcProbNeg(String fileName, int location)} in order to calculate
+     * the probability that a certain files is in the positive or negative class
+     * respectively.
+     *
+     * @param classType indicates whether to analyze the files in
+     *                  test/pos or test/neg
+     */
     public void analyze(int classType) {
-        parse();
-
         File f;
         int loc;
+        PrintWriter outputFile;
 
-        if(classType>0) {
-            f = new File("files/test/pos");
-            loc = 1;
-        }
-        else {
-            f = new File("files/test/neg");
-            loc = -1;
-        }
+        try {
+            if (classType > 0) {
+                f = new File("files/test/pos");
+                loc = 1;
+                outputFile = new PrintWriter("pos_predictions.txt", "UTF-8");
+                outputFile.println("Predictions for the files in files/test/pos\n");
+            } else {
+                f = new File("files/test/neg");
+                loc = -1;
+                outputFile = new PrintWriter("neg_predictions.txt", "UTF-8");
+                outputFile.println("Predictions for the files in files/test/neg\n");
+            }
 
-        File[] files = f.listFiles();
+            File[] files = f.listFiles();
 
-        for(int i=0; i<files.length; i++) {
-            // calculate the probability of files[i] being positive
-            calcProbPos(files[i].getName(), loc);
-            // calculate the probability of files[i] being positive
-            calcProbNeg(files[i].getName(), loc);
-            if(probPositive.compareTo(probNegative) > 0) {
-                // true positive
-                if(classType>0) {
-                    this.truePositive += 1;
-                }
-                // false positive
-                else {
-                    this.falsePositive += 1;
+            for (int i = 0; i < files.length; i++) {
+                // calculate the probability of files[i] being positive
+                calcProbPos(files[i].getName(), loc);
+                // calculate the probability of files[i] being positive
+                calcProbNeg(files[i].getName(), loc);
+                if (probPositive.compareTo(probNegative) > 0) {
+                    outputFile.println(files[i].getName() + " is evaluated to be pos.");
+                    // true positive
+                    if (classType > 0) {
+                        this.truePositive += 1;
+                    }
+                    // false positive
+                    else {
+                        this.falsePositive += 1;
+                    }
+                } else {
+                    outputFile.println(files[i].getName() + " is evaluated to be neg.");
+                    // false negative
+                    if (classType > 0) {
+                        this.falseNegative += 1;
+                    }
+                    // true negative
+                    else {
+                        this.trueNegative += 1;
+                    }
                 }
             }
-            else {
-                // false negative
-                if(classType>0) {
-                    this.falseNegative += 1;
-                }
-                // true negative
-                else {
-                    this.trueNegative += 1;
-                }
-            }
+            outputFile.close();
+        }
+        catch (Exception e) {
+            e.printStackTrace();
         }
     }
 
+
+    /**
+     * Calculates precision, recall and f1 for pos or neg depending on whether
+     * {@param posOrNeg} is a positive or a negative number. It stores them
+     * along with tp, fp, tn, and fn in a file named starting with pos or neg
+     * depending again on the value of {@param posOrNeg}.
+     *
+     * @param posOrNeg indicates whether the metrics for pos or neg need to be
+     *                 calculated
+     */
     public void analyzeCalcMetrics(int posOrNeg) {
+
         // analyze pos
         analyze(1);
         // analyze neg
         analyze(-1);
+
+
 
         if(posOrNeg>0) {
             this.precision = (double) this.truePositive / (this.truePositive + this.falsePositive);
@@ -296,6 +352,28 @@ public class SentimentAnalyzer {
 
         this.f1 = 2 * this.precision * this.recall /
                 (this.precision + this.recall);
+
+
+        try {
+            PrintWriter writer;
+            if(posOrNeg>0) {
+                writer = new PrintWriter("pos_predictions_data.txt", "UTF-8");
+            }
+            else {
+                writer = new PrintWriter("neg_predictions_data.txt", "UTF-8");
+            }
+            writer.println("True positive is: " + this.truePositive);
+            writer.println("False positive is: " + this.falsePositive);
+            writer.println("True negative is: " + this.trueNegative);
+            writer.println("False negative is: " + this.falseNegative);
+            writer.println("Precision is: " + this.precision);
+            writer.println("Recall is: " + this.recall);
+            writer.println("F1 is: " + this.f1);
+            writer.close();
+        }
+        catch (Exception e) {
+            e.printStackTrace();
+        }
 
     }
 
