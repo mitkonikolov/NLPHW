@@ -1,5 +1,7 @@
 import java.io.File;
+import java.io.FileWriter;
 import java.io.FilenameFilter;
+import java.io.IOException;
 import java.util.*;
 
 /**
@@ -203,13 +205,22 @@ public class BrownCluster {
         Iterator<String> iter = this.unigramCount.keySet().iterator();
         String word;
         int numOccur;
+        int numRareOccur=0;
         Tuple t;
         while(iter.hasNext()) {
             word = iter.next();
             numOccur = this.unigramCount.get(word);
-            t = new Tuple(word, numOccur);
-            this.sortedUnigramCount.add(t);
+            if(numOccur<=10) {
+                numRareOccur += 1;
+            }
+            else {
+                t = new Tuple(word, numOccur);
+                this.sortedUnigramCount.add(t);
+            }
         }
+
+        t = new Tuple("UNK", numRareOccur);
+        this.sortedUnigramCount.add(t);
     }
 
 
@@ -248,5 +259,25 @@ public class BrownCluster {
 
     public HashMap<String, HashMap<String, Double>> getTagProbs() {
         return this.tagProbs;
+    }
+
+    public void printRankedVocabList() {
+
+        try {
+            FileWriter fw = new FileWriter("sorted.txt");
+            Iterator<Tuple> iter2 = this.sortedUnigramCount.iterator();
+            Tuple temp;
+
+            while(iter2.hasNext()) {
+                temp = iter2.next();
+                fw.write(temp.getWord() + " : " + temp.getNumOccurences() + "\n");
+            }
+            fw.close();
+        }
+        catch (IOException e) {
+            System.out.println("IO Exception");
+            e.printStackTrace();
+        }
+
     }
 }

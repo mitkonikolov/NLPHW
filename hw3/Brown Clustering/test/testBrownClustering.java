@@ -19,37 +19,6 @@ public class testBrownClustering {
         Iterator<String> iter = uniCount.keySet().iterator();
         String w;
 
-
-/*        HashMap<String, HashMap<String, Double>> bigramCount = lm.getTrigramProbs();
-
-        iter = bigramCount.keySet().iterator();
-        Iterator<String> innerIter;*/
-/*
-        HashMap<String, Double> wordsAfter;
-        while(iter.hasNext()) {
-            w = iter.next();
-            System.out.println(w + " : " + uniCount.get(w));
-
-            //System.out.println(bigramCount.size());
-
-
-*//*            wordsAfter = bigramCount.get(w);
-            //System.out.println(wordsAfter.size());
-
-
-            innerIter = wordsAfter.keySet().iterator();
-
-            System.out.println("After:");
-            while(innerIter.hasNext()) {
-                w = innerIter.next();
-                System.out.println(w + " " + wordsAfter.get(w));
-            }
-            System.out.println("\n\n");*//*
-
-        }*/
-
-
-
         SortedSet<Tuple> sortedUniCount = lm.getSortedUnigramCount();
         Iterator<Tuple> iter2 = sortedUniCount.iterator();
         Tuple temp;
@@ -60,19 +29,14 @@ public class testBrownClustering {
             temp = iter2.next();
             System.out.println(temp.getWord() + " : " + temp.getNumOccurences());
         }
+    }
 
+    @Test
+    public void testPrinting() {
+        BrownCluster bc = new BrownCluster();
 
-
-
-
-
-/*        HashMap<String, Double> uniProb = lm.getUnigProb();
-
-        iter = uniProb.keySet().iterator();
-
-        while(iter.hasNext()) {
-            w = iter.next();
-            System.out.println(uniProb.get(w));
-        }*/
+        bc.parse();
+        bc.getSortedUnigramCount();
+        bc.printRankedVocabList();
     }
 }
