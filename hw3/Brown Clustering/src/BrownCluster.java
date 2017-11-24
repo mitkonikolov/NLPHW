@@ -10,8 +10,11 @@ import java.util.*;
 public class BrownCluster {
     private HashMap<String, Integer> unigramCount;
     private SortedSet<Tuple> sortedUnigramCount;
+    // word1 -> (word2 count) how many times (word1 word2) has been seen
     private HashMap<String, HashMap<String, Integer>> bigramCount;
     private HashMap<String, HashMap<String, Integer>> bigramUnkCount;
+    // word1 -> (word2 count) how many times (word2 word1) has been seen
+    private HashMap<String, HashMap<String, Integer>> predecessorBigram;
 
     private HashMap<Integer, Cluster> allClusters;
     private int totalNumWords;
@@ -32,6 +35,7 @@ public class BrownCluster {
         this.sortedUnigramCount = new TreeSet<>();
         this.bigramCount = new HashMap<>();
         this.bigramUnkCount = new HashMap<>();
+        this.predecessorBigram = new HashMap<>();
 
         this.allClusters = new HashMap<>();
         this.totalNumWords = 0;
@@ -131,7 +135,7 @@ public class BrownCluster {
      * @param word {@code String} after {@param previous}
      * @param mapUpdate indicates which map needs to be updated
      */
-    private void updateNGram (String previous, String word, int mapUpdate) {
+    private void updateNGram(String previous, String word, int mapUpdate) {
         Integer value;
         HashMap<String, Integer> wordAfter;
 
@@ -231,7 +235,7 @@ public class BrownCluster {
         return this.bigramCount;
     }
 
-/*    public void printRankedVocabList() {
+    public void printRankedVocabList() {
 
         try {
             FileWriter fw = new FileWriter("sorted.txt");
@@ -251,18 +255,33 @@ public class BrownCluster {
 
     }
 
-    public void printBigrams() {
+    public void printBigrams(boolean mode) {
         try {
-            FileWriter fw = new FileWriter("bigrams.txt");
-            Iterator<String> iter2 = this.bigramUnkCount.keySet().iterator();
+            FileWriter fw;
+            Iterator<String> iter2;
+
+            if(mode) {
+                fw = new FileWriter("bigrams.txt");
+                iter2 = this.bigramUnkCount.keySet().iterator();
+            }
+            else {
+                fw = new FileWriter("bigrams_predecessor.txt");
+                iter2 = this.predecessorBigram.keySet().iterator();
+            }
             Iterator<String> innerIterator;
-            HashMap<String, Integer> innerMap;
+            HashMap<String, Integer> innerMap = new HashMap<>();
             String previous;
             String wordAfter;
 
             while(iter2.hasNext()) {
                 previous = iter2.next();
-                innerMap = this.bigramUnkCount.get(previous);
+
+                if(mode) {
+                    innerMap = this.bigramUnkCount.get(previous);
+                }
+                else {
+                    innerMap = this.predecessorBigram.get(previous);
+                }
 
                 innerIterator = innerMap.keySet().iterator();
 
@@ -285,7 +304,102 @@ public class BrownCluster {
             System.out.println("IO Exception");
             e.printStackTrace();
         }
-    }*/
+    }
+
+
+    /**
+     * Increments the number of times {@param wordBefore} has been seen before
+     * {@param word}.
+     *
+     * @param word {@code String} seen after {@param wordBefore}
+     * @param wordBefore {@code String} seen before {@param word}
+     * @param numOccurences the number of times {@param wordBefore} has been seen
+     *                      before {@param word}
+     */
+    private void updatePredecessorBigram(String word, String wordBefore, int numOccurences) {
+        HashMap<String, Integer> wordsBefore = this.predecessorBigram.get(word);
+
+        if(wordsBefore==null) {
+            wordsBefore = new HashMap<>();
+        }
+
+        wordsBefore.put(wordBefore, numOccurences);
+
+        this.predecessorBigram.put(word, wordsBefore);
+    }
+
+
+    /**
+     * It goes through the innerMap and sets all unknown words to "UNK".
+     * It also updates the predecessorBigram for wordAfter using previous.
+     *
+     * @param innerMap the current {@code Map}
+     * @param newInnerMap the new {@code Map}
+     * @param unkWords all {@code String} objects seen less than 10 times
+     * @param previous the word seen before {@param innerMap} and
+     *                 {@param newInnerMap}
+     *
+     * @return the number of unknown words seen in {@param innerMap}
+     */
+    private int setUNKInnerMap(HashMap<String, Integer> innerMap,
+                               HashMap<String, Integer> newInnerMap,
+                               Set<String> unkWords,
+                               String previous) {
+
+        Iterator<String> innerIter = innerMap.keySet().iterator();
+        String wordAfter;
+        int numOccurences;
+        int numUnkOccurences = 0;
+
+        while(innerIter.hasNext()) {
+            wordAfter = innerIter.next();
+            numOccurences = innerMap.get(wordAfter);
+
+            // if the wordAfter is unknown according to vocabulary
+            if(unkWords.contains(wordAfter)) {
+                // accumulate all UNK occurrences to add at the end
+                numUnkOccurences += numOccurences;
+                wordAfter = "UNK";
+            }
+            else {
+                this.totalBigrams += numOccurences;
+
+                newInnerMap.put(wordAfter, numOccurences);
+            }
+
+            updatePredecessorBigram(wordAfter, previous, numOccurences);
+        }
+
+        return numUnkOccurences;
+    }
+
+
+    /**
+     * It updates the "UNK" entry in this.bigramUnkCount using the
+     * {@param newInnerMap} and the current {@code Map} associated with "UNK".
+     *
+     * @param newInnerMap
+     */
+    private void updateUNKBigrEntry(HashMap<String, Integer> newInnerMap) {
+        HashMap<String, Integer> currMap = this.bigramUnkCount.get("UNK");
+        Integer currNumOccur;
+
+        if(currMap!=null) {
+            for (String word : currMap.keySet()) {
+                currNumOccur = newInnerMap.get(word);
+
+                if (currNumOccur == null) {
+                    currNumOccur = 0;
+                }
+
+                currNumOccur += currMap.get(word);
+
+                newInnerMap.put(word, currNumOccur);
+            }
+        }
+
+        this.bigramUnkCount.put("UNK", newInnerMap);
+    }
 
 
     /**
@@ -296,10 +410,7 @@ public class BrownCluster {
      */
     private void setBigramUnk(Set<String> unkWords) {
         Iterator<String> outerIter = this.bigramCount.keySet().iterator();
-        Iterator<String> innerIter;
         String previous;
-        String wordAfter;
-        int numOccurences;
         int numUnkOccurences;
         HashMap<String, Integer> innerMap;
         // the new map that will be used
@@ -307,37 +418,23 @@ public class BrownCluster {
 
         while(outerIter.hasNext()) {
             newInnerMap = new HashMap<>();
-            numUnkOccurences = 0;
             previous = outerIter.next();
 
             innerMap = this.bigramCount.get(previous);
 
-            innerIter = innerMap.keySet().iterator();
-
-            while(innerIter.hasNext()) {
-                wordAfter = innerIter.next();
-                numOccurences = innerMap.get(wordAfter);
-
-                // if the wordAfter is unknown according to vocabulary
-                if(unkWords.contains(wordAfter)) {
-                    // accumulate all UNK occurrences to add at the end
-                    numUnkOccurences += numOccurences;
-                }
-                else {
-                    this.totalBigrams += numOccurences;
-
-                    newInnerMap.put(wordAfter, numOccurences);
-                }
+            if(unkWords.contains(previous)) {
+                previous = "UNK";
             }
+
+            numUnkOccurences = setUNKInnerMap(innerMap, newInnerMap, unkWords, previous);
 
             if(numUnkOccurences>0) {
                 this.totalBigrams += numUnkOccurences;
                 newInnerMap.put("UNK", numUnkOccurences);
             }
 
-            if(unkWords.contains(previous)) {
-                this.bigramUnkCount.put("UNK", newInnerMap);
-
+            if(previous.equals("UNK")) {
+                updateUNKBigrEntry(newInnerMap);
             }
             else {
                 this.bigramUnkCount.put(previous, newInnerMap);

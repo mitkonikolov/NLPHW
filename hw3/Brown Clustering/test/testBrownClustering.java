@@ -43,8 +43,13 @@ public class testBrownClustering {
     @Test
     public void testPrintingBigrams() {
         initAndParse();
-        bc.printBigrams();
+        bc.printBigrams(true);
+    }
 
+    @Test
+    public void testPrintingPredecessorBigrams() {
+        initAndParse();
+        bc.printBigrams(false);
     }
 
     @Test
@@ -59,7 +64,7 @@ public class testBrownClustering {
     public void testAddWordsToClusters() {
         initAndParse();
         bc.generateInitialClusters();
-        bc.genAllClusters();
+        //bc.genAllClusters();
         HashMap<Integer, Cluster> clusters = bc.getAllClusters();
         printClusters(clusters);
 
