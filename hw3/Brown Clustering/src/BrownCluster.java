@@ -8,33 +8,38 @@ import java.util.*;
  * Created by Mitko on 11/15/17.
  */
 public class BrownCluster {
-    HashMap<String, Integer> unigramCount;
-    SortedSet<Tuple> sortedUnigramCount;
-    HashMap<String, HashMap<String, Integer>> bigramCount;
+    private HashMap<String, Integer> unigramCount;
+    private SortedSet<Tuple> sortedUnigramCount;
+    private HashMap<String, HashMap<String, Integer>> bigramCount;
+    private HashMap<String, HashMap<String, Integer>> bigramUnkCount;
 
-    // trigram map "I want" -> ("to" -> 3)
-    HashMap<String, HashMap<String, Integer>> trigramCount;
+    private HashMap<Integer, Cluster> allClusters;
+    private int totalNumWords;
+    private int totalBigrams;
+    private int k;
+    // the probability that C1Id is seen before C2Id
+    private HashMap<Integer, HashMap<Integer, Double>> P_C1_C2;
 
-    // map for POS tags
-    HashMap<String, HashMap<String, Integer>> posTags;
+    // Cluster - Cluster - Weight (MI(c1 c2) + MI(c2 c1))
+    private HashMap<Integer, HashMap<Integer, Double>> graph;
+    // Cluster Id - Cluster Id - Change in delta L if they are merged
+    private HashMap<Integer, HashMap<Integer, Double>> tableL;
 
-    HashMap<String, Double> unigramProbs;
-    HashMap<String, HashMap<String,Double>> bigramProbs;
-    HashMap<String, HashMap<String, Double>> trigramProbs;
-    HashMap<String, HashMap<String, Double>> tagProbs;
 
 
     public BrownCluster() {
         this.unigramCount = new HashMap<>();
         this.sortedUnigramCount = new TreeSet<>();
         this.bigramCount = new HashMap<>();
-        this.trigramCount = new HashMap<>();
-        this.posTags = new HashMap<>();
+        this.bigramUnkCount = new HashMap<>();
 
-        this.unigramProbs = new HashMap<>();
-        this.bigramProbs = new HashMap<>();
-        this.trigramProbs = new HashMap<>();
-        this.tagProbs = new HashMap<>();
+        this.allClusters = new HashMap<>();
+        this.totalNumWords = 0;
+        this.totalBigrams = 0;
+        this.k = 200;
+
+        this.graph = new HashMap<>();
+        this.tableL = new HashMap<>();
     }
 
 
@@ -59,19 +64,12 @@ public class BrownCluster {
                 Scanner s2;
 
                 String sentence;
-                String word, posTag;
+                String word;
                 String previousWord;
-                String previousTwoWords;
-
-
-                int q = 0;
 
                 while (s.hasNextLine()) {
-                    q++;
-                    previousWord = "<s>";
-                    previousTwoWords = "<s> <s>";
+                    previousWord = "START";
                     sentence = s.nextLine();
-                    Tuple newTuple;
 
                     if (sentence.length() != 0) {
 
@@ -81,7 +79,6 @@ public class BrownCluster {
                             String[] words = s2.next().split("/");
 
                             word = words[0].toLowerCase();
-                            posTag = words[1];
 
                             // the word contains an apostrophe and needs to be
                             // parsed in a special way
@@ -92,15 +89,11 @@ public class BrownCluster {
 
                                 updateNGram("", firstWord, 0);
                                 updateNGram(previousWord, firstWord, 1);
-                                updateNGram(previousTwoWords, firstWord, 2);
-                                updateNGram(word, posTag, 3);
 
                                 // secondWord is "'s"
                                 updateNGram("", secondWord, 0);
                                 updateNGram(firstWord, secondWord, 1);
-                                updateNGram(previousWord + " " + firstWord, secondWord, 2);
 
-                                previousTwoWords = firstWord + " " + secondWord;
                                 previousWord = secondWord;
                             }
                             // the words does not contain an apostrophe so the maps
@@ -110,19 +103,21 @@ public class BrownCluster {
                                 updateNGram("", word, 0);
                                 // updateBigram
                                 updateNGram(previousWord, word, 1);
-                                // updateTrigram
-                                updateNGram(previousTwoWords, word, 2);
-                                // updatePOS
-                                updateNGram(word, posTag, 3);
 
-                                previousTwoWords = previousWord + " " + word;
                                 previousWord = word;
+                            }
+
+                            // this is the last word - add END
+                            if(!s2.hasNext()) {
+                                updateNGram(previousWord, "END", 1);
                             }
                         }
                     }
 
                 }
             }
+
+            this.sortGenVocabBigram();
         }
         catch (Exception e) {
             e.printStackTrace();
@@ -157,21 +152,8 @@ public class BrownCluster {
                 updateInnerMap(wordAfter, word);
                 this.bigramCount.put(previous, wordAfter);
                 break;
-            case 2:
-                wordAfter = this.trigramCount.get(previous);
-                if(wordAfter==null) {
-                    wordAfter = new HashMap<>();
-                }
-                updateInnerMap(wordAfter, word);
-                this.trigramCount.put(previous, wordAfter);
-                break;
             default:
-                wordAfter = this.posTags.get(previous);
-                if(wordAfter==null) {
-                    wordAfter = new HashMap<>();
-                }
-                updateInnerMap(wordAfter, word);
-                this.posTags.put(previous, wordAfter);
+                throw new InputMismatchException("incorrect choice");
         }
     }
 
@@ -201,17 +183,28 @@ public class BrownCluster {
     }
 
 
-    private void sort() {
+    /**
+     * Generates {@code this.sortedUnigramCount}, adds the UNK class, and
+     * adds the UNK class to the bigram count.
+     */
+    private void sortGenVocabBigram() {
         Iterator<String> iter = this.unigramCount.keySet().iterator();
         String word;
         int numOccur;
         int numRareOccur=0;
         Tuple t;
+
+        Set<String> unkWords = new HashSet<>();
+
         while(iter.hasNext()) {
             word = iter.next();
             numOccur = this.unigramCount.get(word);
+
+            this.totalNumWords += numOccur;
+
             if(numOccur<=10) {
-                numRareOccur += 1;
+                numRareOccur += numOccur;
+                unkWords.add(word);
             }
             else {
                 t = new Tuple(word, numOccur);
@@ -221,6 +214,8 @@ public class BrownCluster {
 
         t = new Tuple("UNK", numRareOccur);
         this.sortedUnigramCount.add(t);
+
+        setBigramUnk(unkWords);
     }
 
 
@@ -229,7 +224,6 @@ public class BrownCluster {
     }
 
     public SortedSet<Tuple> getSortedUnigramCount() {
-        this.sort();
         return this.sortedUnigramCount;
     }
 
@@ -237,31 +231,7 @@ public class BrownCluster {
         return this.bigramCount;
     }
 
-    public HashMap<String, HashMap<String, Integer>> getTrigramCount() {
-        return this.trigramCount;
-    }
-
-    public HashMap<String, HashMap<String, Integer>> getPosTags() {
-        return this.posTags;
-    }
-
-    public HashMap<String, Double> getUnigProb() {
-        return this.unigramProbs;
-    }
-
-    public HashMap<String, HashMap<String, Double>> getBigramProbs() {
-        return this.bigramProbs;
-    }
-
-    public HashMap<String, HashMap<String, Double>> getTrigramProbs() {
-        return this.trigramProbs;
-    }
-
-    public HashMap<String, HashMap<String, Double>> getTagProbs() {
-        return this.tagProbs;
-    }
-
-    public void printRankedVocabList() {
+/*    public void printRankedVocabList() {
 
         try {
             FileWriter fw = new FileWriter("sorted.txt");
@@ -279,5 +249,533 @@ public class BrownCluster {
             e.printStackTrace();
         }
 
+    }
+
+    public void printBigrams() {
+        try {
+            FileWriter fw = new FileWriter("bigrams.txt");
+            Iterator<String> iter2 = this.bigramUnkCount.keySet().iterator();
+            Iterator<String> innerIterator;
+            HashMap<String, Integer> innerMap;
+            String previous;
+            String wordAfter;
+
+            while(iter2.hasNext()) {
+                previous = iter2.next();
+                innerMap = this.bigramUnkCount.get(previous);
+
+                innerIterator = innerMap.keySet().iterator();
+
+                fw.write("\"" + previous + "\" : ");
+
+                while(innerIterator.hasNext()) {
+                    wordAfter = innerIterator.next();
+                    if(!iter2.hasNext()) {
+                        fw.write("\"" + wordAfter + "\" " + innerMap.get(wordAfter));
+                    }
+                    else {
+                        fw.write("\"" + wordAfter + "\" " + innerMap.get(wordAfter) + ", ");
+                    }
+                }
+                fw.write("\n\n");
+            }
+            fw.close();
+        }
+        catch (IOException e) {
+            System.out.println("IO Exception");
+            e.printStackTrace();
+        }
+    }*/
+
+
+    /**
+     * Using {@param unkWords} it replaces all words which have been
+     * seen less than 10 times with the string "UNK"
+     *
+     * @param unkWords
+     */
+    private void setBigramUnk(Set<String> unkWords) {
+        Iterator<String> outerIter = this.bigramCount.keySet().iterator();
+        Iterator<String> innerIter;
+        String previous;
+        String wordAfter;
+        int numOccurences;
+        int numUnkOccurences;
+        HashMap<String, Integer> innerMap;
+        // the new map that will be used
+        HashMap<String, Integer> newInnerMap;
+
+        while(outerIter.hasNext()) {
+            newInnerMap = new HashMap<>();
+            numUnkOccurences = 0;
+            previous = outerIter.next();
+
+            innerMap = this.bigramCount.get(previous);
+
+            innerIter = innerMap.keySet().iterator();
+
+            while(innerIter.hasNext()) {
+                wordAfter = innerIter.next();
+                numOccurences = innerMap.get(wordAfter);
+
+                // if the wordAfter is unknown according to vocabulary
+                if(unkWords.contains(wordAfter)) {
+                    // accumulate all UNK occurrences to add at the end
+                    numUnkOccurences += numOccurences;
+                }
+                else {
+                    this.totalBigrams += numOccurences;
+
+                    newInnerMap.put(wordAfter, numOccurences);
+                }
+            }
+
+            if(numUnkOccurences>0) {
+                this.totalBigrams += numUnkOccurences;
+                newInnerMap.put("UNK", numUnkOccurences);
+            }
+
+            if(unkWords.contains(previous)) {
+                this.bigramUnkCount.put("UNK", newInnerMap);
+
+            }
+            else {
+                this.bigramUnkCount.put(previous, newInnerMap);
+            }
+
+        }
+    }
+
+
+    /**
+     * It goes through {@code this.sortedUnigramCount} and using the counts,
+     * it generates clusters for the 200 most popular words and puts them into
+     * {@code this.allClusters}
+     *
+     * Time complexity: O(k)
+     *
+     */
+    void generateInitialClusters() {
+        Cluster cluster;
+        int i = 1;
+
+        Iterator<Tuple> iter = this.sortedUnigramCount.iterator();
+        Tuple temp;
+
+        while(iter.hasNext() && i<=this.k) {
+            temp = iter.next();
+            // the data has already been extracted
+            iter.remove();
+            cluster = new Cluster(i, temp.getWord(), temp.getNumOccurences(), this.totalNumWords);
+            this.allClusters.put(i, cluster);
+            i++;
+        }
+    }
+
+    // TODO Fixing this is the backbone of the code
+    private int getN_c1_c2(Set<String> wordsBefore, Set<String> wordsAfter) {
+        assert(wordsBefore.size()>=1 && wordsAfter.size()>=1);
+
+        int n_c1_c2 = 0;
+
+        Iterator<String> iterBefore = wordsBefore.iterator();
+        String word1;
+
+        Iterator<String> iterAfter = wordsAfter.iterator();
+        String word2;
+
+        HashMap<String, Integer> innerMap;
+
+        while(iterBefore.hasNext()) {
+            word1 = iterBefore.next();
+            innerMap = this.bigramUnkCount.get(word1);
+
+            while(iterAfter.hasNext()) {
+                word2 = iterAfter.next();
+                try {
+                    if (innerMap.containsKey(word2)) {
+                        n_c1_c2 += innerMap.get(word2);
+                    }
+                }
+                catch (NullPointerException e) {
+                    System.out.println("EXCEPTION " + word1 + " and word2 is " + word2);
+                }
+            }
+        }
+
+        return n_c1_c2;
+    }
+
+
+    /**
+     * Given two clusters it calculates the quality of
+     * {@param c} {@param newCluster}. It returns the value of
+     * P(c newCluster) * log(P(c newCluster) / (P(c) * P(newCluster))).
+     *
+     * @param c {@code Cluster} before {@param newCluster}
+     * @param newCluster {@code Cluster} after {@param c}
+     * @return the MI of (c newCluster)
+     */
+    private double getMIOf(Cluster c, Cluster newCluster) {
+        int N_c1_c2;
+
+        N_c1_c2 = getN_c1_c2(c.getWords(), newCluster.getWords());
+
+        return c.checkQuality(newCluster, N_c1_c2, this.totalBigrams);
+    }
+
+
+    /**
+     * Given a {@code Cluster} id {@param c1} and a {@code Cluster} id
+     * {@param c2}, it calculates the weight of the edge between the two
+     * {@code Cluster} nodes in the graph.
+     *
+     * @param c1 the id of the first {@code Cluster}
+     * @param c2 the id of the second {@code Cluster}
+     * @return the weight that should be put on the graph between the Clusters
+     */
+    private double getWeight(int c1, int c2) {
+        if(c1==c2) {
+            Cluster c = this.allClusters.get(c1);
+            return this.getMIOf(c, c);
+        }
+        else {
+            double weight;
+            Cluster c11 = this.allClusters.get(c1);
+            Cluster c12 = this.allClusters.get(c2);
+            weight = this.getMIOf(c11, c12);
+            weight += this.getMIOf(c12, c11);
+
+            return weight;
+        }
+    }
+
+
+    /**
+     * Given {@code Cluster} id {@param c1} and {@code Cluster} id {@param c2}
+     * and the weight equal to the MI(c1 c2) + MI(c2 c1), it puts the data into
+     * {@code this.graph}.
+     *
+     * @param c1 the first {@code Cluster} id
+     * @param c2 the second {@code Cluster} id
+     * @param weight MI(c1 c2) + MI(c2 c1)
+     */
+    private void putIntoGraph(int c1, int c2, double weight) {
+        HashMap<Integer, Double> innerMap = new HashMap<>();
+        innerMap.put(c2, weight);
+
+        this.graph.put(c1, innerMap);
+    }
+
+
+    /**
+     * Generates the graph between clusters and sets the values
+     * of the nodes
+     */
+    void generateGraph() {
+        this.graph = new HashMap<>();
+        double weight;
+
+        for(int clusterId : this.allClusters.keySet()) {
+
+            for(int i=clusterId; i<=this.k; i++) {
+                weight = this.getWeight(clusterId, i);
+                this.putIntoGraph(clusterId, i, weight);
+                this.putIntoGraph(i, clusterId, weight);
+            }
+        }
+    }
+
+
+    /**
+     * Using the {@code Cluster} IDs {@param c1} and {@param c2}, it calculates
+     * what would be the resulting Cluster if they were to be merged.
+     * It looks at what follows {@code Cluster} {@param c1} and what is before
+     * it, it looks at the same data for {@param c2} and thus creates the
+     * new {@code Cluster}. The imaginary new {@code Cluster} is stored at
+     * position this.k+2 in this.allClusters.
+     *
+     * @param c1 {@code Cluster} ID
+     * @param c2 {@code Cluster} ID
+     */
+    private void createNewCluster(int c1, int c2) {
+
+    }
+
+
+    /**
+     * Given two {@code Cluster} IDs, it calculates what would be the change
+     * in L if {@param c1} and {@param c2} were to be merged. The imaginary
+     * new {@code Cluster} is temporarily stored i this.k+2.
+     *
+     * @param c1 first {@code Cluster} ID
+     * @param c2 second {@code Cluster} ID
+     * @return the possible resultant change in L
+     */
+    private double calculateDeltaL(int c1, int c2) {
+        this.createNewCluster(c1, c2);
+
+        double deltaL = 0;
+
+        // changes by adding the new cluster which is
+        // temporarily stored at this.k+2
+        for(int i=1; i<=this.k; i++) {
+            if(i!=c1 && i!=c2) {
+                deltaL += getWeight(i, this.k+2);
+            }
+        }
+
+        //removing the old clusters
+        HashMap<Integer, Double> innerMap = this.graph.get(c1);
+        for(int id : innerMap.keySet()) {
+            deltaL -= innerMap.get(id);
+        }
+
+        // removing the old clusters
+        innerMap = this.graph.get(c2);
+        for(int id : innerMap.keySet()) {
+            deltaL -= innerMap.get(id);
+        }
+
+        return deltaL;
+    }
+
+
+    /**
+     * Updates the table {@code deltaL} with the weight {@param deltaL}
+     * for the {@code Cluster} objects with IDs {@param c1} and {@param c2}.
+     *
+     * Time complexity: O(1)
+     *
+     * @param c1 first {@code Cluster} ID
+     * @param c2 second {@code Cluster} ID
+     * @param deltaL weight between {@param c1} and {@param c2}
+     */
+    private void updateDeltaL(int c1, int c2, double deltaL) {
+        HashMap<Integer, Double> innerMap = new HashMap<>();
+        innerMap.put(c2, deltaL);
+        this.tableL.put(c1, innerMap);
+
+        innerMap = new HashMap<>();
+        innerMap.put(c1, deltaL);
+        this.tableL.put(c2, innerMap);
+    }
+
+
+    /**
+     * Initializes the table L for the first this.k {@code Cluster}.
+     */
+    void initTableL() {
+        double deltaL;
+
+        for(int c1=1; c1<=this.k; c1++) {
+            for(int c2=c1+1; c2<=this.k; c2++) {
+                deltaL = this.calculateDeltaL(c1, c2);
+                this.updateDeltaL(c1, c2, deltaL);
+            }
+        }
+    }
+
+
+    /**
+     * Adds a new {@code Cluster} at position this.k+1. It updates the
+     * values in this.graph and this.tableL.
+     */
+    private void addK1Cluster() {
+        Iterator<Tuple> iter = this.sortedUnigramCount.iterator();
+        // get the next most popular word
+        Tuple t = iter.next();
+        iter.remove();
+
+        // create a cluster from the next most popular word
+        Cluster c = new Cluster(this.k+1, t.getWord(), t.getNumOccurences(), this.totalNumWords);
+        this.allClusters.put(this.k+1, c);
+
+        // update the graph
+        double weight;
+        for(int i=1; i<=this.k+1; i++) {
+            weight = this.getWeight(this.k+1, i);
+            this.putIntoGraph(this.k+1, i, weight);
+            this.putIntoGraph(i, this.k+1, weight);
+        }
+
+        // update tableL
+        double deltaL;
+        for(int c1=1; c1<=this.k; c1++) {
+            deltaL = this.calculateDeltaL(c1, this.k+1);
+            this.updateDeltaL(c1, this.k+1, deltaL);
+        }
+    }
+
+
+    /**
+     * Given two {@code Cluster} IDs, it merges the two new clusters.
+     * It updates the maps responsible for tracking which clusters are followed
+     * by which other clusters to reflect that c1 and c2 are now the same.
+     * It also updates the word bigrams to reflect that c1 and c2 are now the same.
+     *
+     * @param c1 first {@code Cluster} ID
+     * @param c2 second {@code Cluster} ID
+     */
+    private void merge(int c1, int c2) {
+
+    }
+
+
+    private void mergeBest() {
+        double currDeltaL;
+        double bestDeltaL = 0;
+        int bestLeft=0;
+        int bestRight=0;
+        HashMap<Integer, Double> innerMap;
+
+        for(int c1=1; c1<=this.k; c1++) {
+            innerMap = this.tableL.get(c1);
+
+            for(int c2=c1+1; c2<=this.k+1; c2++) {
+                currDeltaL = innerMap.get(c2);
+                if(currDeltaL>bestDeltaL) {
+                    bestDeltaL = currDeltaL;
+                    bestLeft = c1;
+                    bestRight = c2;
+                }
+            }
+        }
+
+        merge(bestLeft, bestRight);
+    }
+
+
+    /**
+     * It initializes the tableL and then merges clusters into new ones by
+     * generating a new K+1 cluster and then merging the clusters which lead
+     * to the smallest loss in MI.
+     */
+    public void cluster() {
+        initTableL();
+
+        for(int i=0; i<=100; i++) {
+            this.addK1Cluster();
+            this.mergeBest();
+        }
+    }
+
+
+/*    public void genAllClusters() {
+        Tuple t;
+        Iterator<Tuple> iter = this.sortedUnigramCount.iterator();
+
+        int i = 1;
+
+        while(iter.hasNext() && i<this.k+1000) {
+            if(i>this.k) {
+                t = iter.next();
+                mergeCluster(t.getWord(), t.getNumOccurences());
+            }
+            else {
+                iter.next();
+            }
+
+            i++;
+        }
+
+
+
+        // merges all clusters from between 1 and i<=k
+        //mergeFinalClusters();
+    }*/
+
+
+
+    /*
+     * Given a {@param word} creates a cluster for it and finds the best
+     * place to merge clusters to bring them down to k.
+     * @param word
+     * @param numOccurences
+     */
+/*    private void mergeCluster(String word, int numOccurences) {
+        Cluster cluster;
+        // add the newest cluster to all my clusters
+        Cluster newestCluster = new Cluster(this.k+1, word, numOccurences, this.totalNumWords);
+        this.allClusters.put(this.k+1, newestCluster);
+        // set up variables to use in the loops
+        Cluster clusterAfter;
+        double maxValue = 0;
+        double temp;
+        int N_c1_c2 = 0;
+        int leftClusterNum=1;
+        int rightClusterNum=1;
+
+        for(int i = 1; i<=this.k; i++) {
+            // get the left cluster
+            cluster = this.allClusters.get(i);
+
+            for(int j = i+1; j<= this.k+1; j++) {
+                // get the right cluster
+                clusterAfter = this.allClusters.get(j);
+                // what would be the change in quality if merging was to happen
+                temp = this.checkClusteringQuality(cluster, clusterAfter);
+                // if best so far
+                if (temp > maxValue) {
+                    maxValue = temp;
+                    // update best fit clusters' ids
+                    leftClusterNum = i;
+                    rightClusterNum = j;
+                }
+            }
+        }
+
+        // add to whatever cluster's id it was found to fit best
+        cluster = this.allClusters.get(leftClusterNum);
+        clusterAfter = this.allClusters.get(rightClusterNum);
+
+        cluster.mergeClusters(clusterAfter);
+
+        this.allClusters.remove(rightClusterNum);
+
+        if(rightClusterNum != (k+1)) {
+            this.allClusters.put(rightClusterNum, this.allClusters.get(k+1));
+        }
+    }*/
+
+
+    /*
+     * Calculates the new quality of {@param leftCluster} and {@param rightCluster}
+     * were to be merged.
+     * @param leftCluster
+     * @param rightCluster
+     * @return
+     */
+/*    private double checkClusteringQuality(Cluster leftCluster, Cluster rightCluster) {
+        Cluster newCluster = Cluster.mergeTwoClusters(leftCluster, rightCluster);
+        int idLeft = leftCluster.getId();
+        int idRight = rightCluster.getId();
+
+        double quality = 0;
+
+        // clusters have been merged so we are back to k clusters
+        for(int i=1; i<=k; i++) {
+            // the cluster has not yet been added to this.allClusters
+            // but we pretend that the old idLeft and the old idRight are
+            // gone
+            if(i!=idRight && i<idLeft) {
+                quality += this.getMIOf(i, newCluster, true);
+            }
+
+            if(i>idLeft && i!=idRight) {
+                quality += this.getMIOf(i, newCluster, false);
+            }
+        }
+
+        return quality;
+
+    }*/
+
+
+
+
+
+    public HashMap<Integer, Cluster> getAllClusters() {
+        return this.allClusters;
     }
 }
