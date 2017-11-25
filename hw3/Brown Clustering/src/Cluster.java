@@ -11,6 +11,10 @@ public class Cluster {
     private final int totNumWords;
     private double p_c;
 
+    public Cluster() {
+        this.id = 0;
+        this.totNumWords = 0;
+    }
 
     public Cluster(int id) {
         this.id = id;
@@ -90,7 +94,7 @@ public class Cluster {
      * @param right
      * @return
      */
-    public static Cluster mergeTwoClusters(Cluster left, Cluster right) {
+    public static Cluster mergeTwoClusters(Cluster left, Cluster right, int newClusterID) {
         Set<String> newWords = new HashSet<>();
 
         newWords.addAll(left.getWords());
@@ -100,7 +104,7 @@ public class Cluster {
         int newTotNumWords = left.totNumWords;
 
 
-        return new Cluster(left.id, newWords, newNumOccurences, newTotNumWords);
+        return new Cluster(newClusterID, newWords, newNumOccurences, newTotNumWords);
     }
 
 

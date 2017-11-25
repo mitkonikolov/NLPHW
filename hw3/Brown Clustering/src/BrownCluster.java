@@ -1,3 +1,4 @@
+
 import java.io.File;
 import java.io.FileWriter;
 import java.io.FilenameFilter;
@@ -445,6 +446,81 @@ public class BrownCluster {
 
 
     /**
+     * It goes through {@param map} and substitutes all instances of {@param word}
+     * with "CLUSTER-" + {@param clusterNumber}. It first checks if the map already
+     * contains this cluster name and if it does, it retains this information and
+     * updates it by adding the occurences of {@param word}.
+     *
+     * @param map {@code HashMap} to be checked for containing {@param word}
+     * @param word {@code String} to be substituted with the cluster name
+     * @param clusterNumber {@code int} representing the number of the cluster
+     */
+    private void subWordWithCluster(HashMap<String, Integer> map, String word, int clusterNumber) {
+        String clusterName = "CLUSTER-" + clusterNumber;
+        if(map!=null) {
+            Integer currClusterNumOccurences = map.get(clusterName);
+
+            if (currClusterNumOccurences == null) {
+                currClusterNumOccurences = 0;
+            }
+
+            Integer currWordNumOccur = map.get(word);
+            if (currWordNumOccur == null) {
+                currWordNumOccur = 0;
+            }
+
+            map.remove(word);
+
+            map.put(clusterName, (currClusterNumOccurences + currWordNumOccur));
+        }
+
+    }
+
+
+    /**
+     * It substitutes the instances of {@param word} with the name
+     * "CLUSTER-" + {@param clusterNumber}.
+     *
+     * @param word {@code String} to be substituted
+     * @param clusterNumber {@code int} representing what is the number of the
+     *                      cluster in which {@param word} is merged
+     */
+    private void subClusterForWordInBigrams(String word, int clusterNumber) {
+        String clusterName = "CLUSTER-" + clusterNumber;
+        HashMap<String, Integer> after = this.bigramUnkCount.get(word);
+        HashMap<String, Integer> temp;
+
+        for(String clusterAfter : after.keySet()) {
+            // update the predecessorBigram for this cluster so later when
+            // it is read, it will correctly reflect the predecessor's name
+            temp = this.predecessorBigram.get(clusterAfter);
+            subWordWithCluster(temp, word, clusterNumber);
+        }
+        // if word is followed by itself, its name needs to be updated too
+        subWordWithCluster(after, word, clusterNumber);
+
+
+        HashMap<String, Integer> before = this.predecessorBigram.get(word);
+        for(String clusterBefore : before.keySet()) {
+            // update the bigramUnkCount so it knows that word has been
+            // changed to a cluster and later when it's checked, it will know
+            temp = this.bigramUnkCount.get(clusterBefore);
+            subWordWithCluster(temp, word, clusterNumber);
+        }
+        // if word is preceded by itself, its name needs to be updated too
+        subWordWithCluster(before, word, clusterNumber);
+
+        after = this.bigramUnkCount.get(word);
+        this.bigramUnkCount.remove(word);
+        this.bigramUnkCount.put(clusterName, after);
+
+        before = this.predecessorBigram.get(word);
+        this.predecessorBigram.remove(word);
+        this.predecessorBigram.put(clusterName, before);
+    }
+
+
+    /**
      * It goes through {@code this.sortedUnigramCount} and using the counts,
      * it generates clusters for the 200 most popular words and puts them into
      * {@code this.allClusters}
@@ -464,43 +540,49 @@ public class BrownCluster {
             // the data has already been extracted
             iter.remove();
             cluster = new Cluster(i, temp.getWord(), temp.getNumOccurences(), this.totalNumWords);
+
             this.allClusters.put(i, cluster);
+
+            subClusterForWordInBigrams(temp.getWord(), i);
             i++;
         }
     }
 
-    // TODO Fixing this is the backbone of the code
-    private int getN_c1_c2(Set<String> wordsBefore, Set<String> wordsAfter) {
-        assert(wordsBefore.size()>=1 && wordsAfter.size()>=1);
 
-        int n_c1_c2 = 0;
-
-        Iterator<String> iterBefore = wordsBefore.iterator();
-        String word1;
-
-        Iterator<String> iterAfter = wordsAfter.iterator();
-        String word2;
-
-        HashMap<String, Integer> innerMap;
-
-        while(iterBefore.hasNext()) {
-            word1 = iterBefore.next();
-            innerMap = this.bigramUnkCount.get(word1);
-
-            while(iterAfter.hasNext()) {
-                word2 = iterAfter.next();
-                try {
-                    if (innerMap.containsKey(word2)) {
-                        n_c1_c2 += innerMap.get(word2);
-                    }
-                }
-                catch (NullPointerException e) {
-                    System.out.println("EXCEPTION " + word1 + " and word2 is " + word2);
-                }
+    /**
+     * Given {@code Cluster} ID {@param c1} and another {@code Cluster} ID
+     * {@param c2}, it returns n(c1, c2).
+     *
+     * @param c1 first {@code Cluster} ID
+     * @param c2 second {@code Cluster} ID
+     * @return n(c1, c2)
+     */
+    private int getN_c1_c2(int c1, int c2) {
+        if(c2 == (this.k+2)) {
+            HashMap<String, Integer> clustersBefore =
+                    this.predecessorBigram.get("CLUSTER-" + c2);
+            if(clustersBefore==null) {
+                clustersBefore = new HashMap<>();
+            }
+            Integer n_c1_c2 = clustersBefore.get("CLUSTER-" + c1);
+            if (n_c1_c2 == null) {
+                return 0;
+            } else {
+                return n_c1_c2;
             }
         }
-
-        return n_c1_c2;
+        else {
+            HashMap<String, Integer> clustersAfter = this.bigramUnkCount.get("CLUSTER-" + c1);
+            if(clustersAfter==null) {
+                clustersAfter = new HashMap<>();
+            }
+            Integer n_c1_c2 = clustersAfter.get("CLUSTER-" + c2);
+            if (n_c1_c2 == null) {
+                return 0;
+            } else {
+                return n_c1_c2;
+            }
+        }
     }
 
 
@@ -509,16 +591,19 @@ public class BrownCluster {
      * {@param c} {@param newCluster}. It returns the value of
      * P(c newCluster) * log(P(c newCluster) / (P(c) * P(newCluster))).
      *
-     * @param c {@code Cluster} before {@param newCluster}
-     * @param newCluster {@code Cluster} after {@param c}
+     * @param c {@code Cluster} ID before {@param newCluster}
+     * @param newCluster {@code Cluster} ID after {@param c}
      * @return the MI of (c newCluster)
      */
-    private double getMIOf(Cluster c, Cluster newCluster) {
+    private double getMIOf(int c, int newCluster) {
         int N_c1_c2;
 
-        N_c1_c2 = getN_c1_c2(c.getWords(), newCluster.getWords());
+        N_c1_c2 = getN_c1_c2(c, newCluster);
 
-        return c.checkQuality(newCluster, N_c1_c2, this.totalBigrams);
+        Cluster c1 = this.allClusters.get(c);
+
+        return c1.checkQuality(this.allClusters.get(newCluster),
+                N_c1_c2, this.totalBigrams);
     }
 
 
@@ -533,15 +618,12 @@ public class BrownCluster {
      */
     private double getWeight(int c1, int c2) {
         if(c1==c2) {
-            Cluster c = this.allClusters.get(c1);
-            return this.getMIOf(c, c);
+            return this.getMIOf(c1, c1);
         }
         else {
             double weight;
-            Cluster c11 = this.allClusters.get(c1);
-            Cluster c12 = this.allClusters.get(c2);
-            weight = this.getMIOf(c11, c12);
-            weight += this.getMIOf(c12, c11);
+            weight = this.getMIOf(c1, c2);
+            weight += this.getMIOf(c2, c1);
 
             return weight;
         }
@@ -558,22 +640,38 @@ public class BrownCluster {
      * @param weight MI(c1 c2) + MI(c2 c1)
      */
     private void putIntoGraph(int c1, int c2, double weight) {
-        HashMap<Integer, Double> innerMap = new HashMap<>();
-        innerMap.put(c2, weight);
+        if(c1<c2) {
+            // current edges from c1 to other nodes
+            HashMap<Integer, Double> innerMap = this.graph.get(c1);
+            // no edges from c1 to other nodes so far
+            if(innerMap==null) {
+                innerMap = new HashMap<>();
+            }
+            innerMap.put(c2, weight);
 
-        this.graph.put(c1, innerMap);
+            this.graph.put(c1, innerMap);
+        }
+        else {
+            HashMap<Integer, Double> innerMap = this.graph.get(c2);
+            if(innerMap==null) {
+                innerMap = new HashMap<>();
+            }
+            innerMap.put(c1, weight);
+
+            this.graph.put(c2, innerMap);
+        }
     }
 
 
     /**
-     * Generates the graph between clusters and sets the values
+     * Initializes the graph between clusters and sets the values
      * of the nodes
      */
     void generateGraph() {
         this.graph = new HashMap<>();
         double weight;
 
-        for(int clusterId : this.allClusters.keySet()) {
+        for(int clusterId =1; clusterId<=this.allClusters.size(); clusterId++) {
 
             for(int i=clusterId; i<=this.k; i++) {
                 weight = this.getWeight(clusterId, i);
@@ -585,17 +683,83 @@ public class BrownCluster {
 
 
     /**
+     * It goes through the values in {@param currMap} associated with
+     * {@param c1} and inserts them in {@param currMap} under
+     * "CLUSTER-" + this.k+2. It checks whether the names "CLUSTER-"+c1 or
+     * "CLUSTER-" + c2 is amongst the mapped values to {@param c1}.
+     * If such values are indeed there, it changes them to "CLUSTER-" +
+     * this.k+2. Otherwise, it just copies the cluster names or word names
+     * as they are in the new {@code Map} associated with "CLUSTER-"+this.k+2.
+     *
+     * @param currMap {@code Map} to be traversed
+     * @param c1 {@code Cluster} ID whose values will be evaluated
+     * @param c2 the name of the second {@code Cluster} that is being merged
+     */
+    private void imaginaryMapCounts(HashMap<String, HashMap<String, Integer>> currMap,
+                                    int c1, int c2) {
+        Integer currNumOccurences;
+        HashMap<String, Integer> values = currMap.get("CLUSTER-" + c1);
+        if(values!=null) {
+            HashMap<String, Integer> newMap = currMap.get("CLUSTER-" + this.k + 2);
+            if (newMap == null) {
+                newMap = new HashMap<>();
+            }
+            for (String cluster : values.keySet()) {
+                // if c1 or c2 is among the entries, switch them
+                if (cluster.equals("CLUSTER-" + c1) ||
+                        cluster.equals(("CLUSTER-" + c2))) {
+                    // preserve the old value
+                    currNumOccurences = newMap.get("CLUSTER-" + (this.k + 2));
+                    if (currNumOccurences == null) {
+                        currNumOccurences = 0;
+                    }
+                    currNumOccurences += values.get(cluster);
+                    newMap.put("CLUSTER-" + (this.k + 2), currNumOccurences);
+                }
+                // regular entries
+                else {
+                    // preserve the old value
+                    currNumOccurences = newMap.get(cluster);
+                    if (currNumOccurences == null) {
+                        currNumOccurences = 0;
+                    }
+                    currNumOccurences += values.get(cluster);
+                    newMap.put(cluster + "", currNumOccurences);
+                }
+            }
+
+            currMap.put("CLUSTER-" + (this.k + 2), newMap);
+        }
+
+    }
+
+
+
+    /**
      * Using the {@code Cluster} IDs {@param c1} and {@param c2}, it calculates
      * what would be the resulting Cluster if they were to be merged.
      * It looks at what follows {@code Cluster} {@param c1} and what is before
-     * it, it looks at the same data for {@param c2} and thus creates the
-     * new {@code Cluster}. The imaginary new {@code Cluster} is stored at
-     * position this.k+2 in this.allClusters.
+     * it, it looks at the same data for {@param c2} and thus updates the maps
+     * without affecting the real data.
+     * The imaginary new {@code Cluster} is stored at position this.k+2 in
+     * this.allClusters.
      *
      * @param c1 {@code Cluster} ID
      * @param c2 {@code Cluster} ID
      */
     private void createNewCluster(int c1, int c2) {
+
+        Cluster imaginaryCluster = Cluster.mergeTwoClusters(
+                this.allClusters.get(c1),
+                this.allClusters.get(c2), this.k+2);
+
+        this.allClusters.put(this.k + 2, imaginaryCluster);
+
+
+        this.imaginaryMapCounts(this.bigramUnkCount, c1, c2);
+        this.imaginaryMapCounts(this.bigramUnkCount, c2, c1);
+        this.imaginaryMapCounts(this.predecessorBigram, c1, c2);
+        this.imaginaryMapCounts(this.predecessorBigram, c2, c1);
 
     }
 
@@ -649,11 +813,17 @@ public class BrownCluster {
      * @param deltaL weight between {@param c1} and {@param c2}
      */
     private void updateDeltaL(int c1, int c2, double deltaL) {
-        HashMap<Integer, Double> innerMap = new HashMap<>();
+        HashMap<Integer, Double> innerMap = this.tableL.get(c1);
+        if(innerMap==null) {
+            innerMap = new HashMap<>();
+        }
         innerMap.put(c2, deltaL);
         this.tableL.put(c1, innerMap);
 
-        innerMap = new HashMap<>();
+        innerMap = this.tableL.get(c2);
+        if(innerMap==null) {
+            innerMap = new HashMap<>();
+        }
         innerMap.put(c1, deltaL);
         this.tableL.put(c2, innerMap);
     }
@@ -706,6 +876,195 @@ public class BrownCluster {
 
 
     /**
+     * Increments the number of times {@param c1} has been seen in {@param map}
+     * by {@param incrementalValue}.
+     *
+     * @param map
+     * @param c1
+     * @param incrementalValue
+     */
+    private void incrMapOccurences(HashMap<String, Integer> map, int c1,
+                                   int incrementalValue) {
+        // if c1 has already been seen in this map, preserve the value
+        Integer currNumOccur = map.get("CLUSTER-" + c1);
+        if(currNumOccur==null) {
+            currNumOccur = 0;
+        }
+
+        currNumOccur += incrementalValue;
+
+        map.put("CLUSTER-"+c1, currNumOccur);
+    }
+
+
+    /**
+     * It looks at the values in {@param extractMap} associated with {@param c2}
+     * and updates {@param updateMap} by incrementing the number of times
+     * {@param c1} has been seen in it by the number of times {@param c2} had
+     * previously been seen in it. After that it removes {@param c2} from
+     * {@param updateMap}.
+     *
+     * Example.
+     * For example through bigramUnkCount we know what is followed by
+     * "CLUSTER-"+c2 so we know which clusters in predecessorBigram's values
+     * need to be updated as they are now coming after c1 not after c2.
+     *
+     * @param c1
+     * @param c2
+     * @param extractMap
+     * @param updateMap
+     */
+    private void updateClusterReferences(int c1, int c2,
+                                         HashMap<String, HashMap<String, Integer>> extractMap,
+                                         HashMap<String, HashMap<String, Integer>> updateMap) {
+        HashMap<String, Integer> extractClusters = extractMap.get("CLUSTER-"+c2);
+        HashMap<String, Integer> innerMap;
+
+        if(extractClusters!=null) {
+            for (String cluster : extractClusters.keySet()) {
+                // increments the value for c1 before/after cluster
+                // by the number of times c2 has been seen before cluster
+                innerMap = updateMap.get(cluster);
+                incrMapOccurences(innerMap, c1, extractClusters.get(cluster));
+                // remove "CLUSTER-"+c2 as it is already contained in "CLUSTER-"+c1
+                innerMap.remove("CLUSTER-" + c2);
+            }
+        }
+    }
+
+    /**
+     * Takes the values from {@param oldMap} and merges them into
+     * {@param newMap} either by icrementing already present values in
+     * {@param newMap} or by adding a new value.
+     *
+     * @param oldMap
+     * @param newMap
+     */
+    private void mergeMaps(HashMap<String, Integer> oldMap,
+                           HashMap<String, Integer> newMap) {
+        if(oldMap!=null) {
+            for (String cluster : oldMap.keySet()) {
+                // is c1 already followed by the cluster that c2 is
+                Integer currNumOccur = newMap.get(cluster);
+                if (currNumOccur == null) {
+                    currNumOccur = 0;
+                }
+
+                // add the number of times cluster has been seen after
+                // c2
+                currNumOccur += oldMap.get(cluster);
+                newMap.put(cluster, currNumOccur);
+            }
+        }
+    }
+
+
+
+    private void updateMapCounts(int c1, int c2, Cluster newCluster) {
+        // update other clusters' references to c2 to refere to c1 instead
+        // update the values too
+        updateClusterReferences(c1, c2, this.bigramUnkCount, this.predecessorBigram);
+        updateClusterReferences(c1, c2, this.predecessorBigram, this.bigramUnkCount);
+
+        HashMap<String, Integer> clustersAfterC2 = this.bigramUnkCount.get("CLUSTER-"+c2);
+        HashMap<String, Integer> clustersBeforeC2 = this.predecessorBigram.get("CLUSTER-"+c2);
+        HashMap<String, Integer> clustersAfterC1 = this.bigramUnkCount.get("CLUSTER-"+c1);
+        HashMap<String, Integer> clustersBeforeC1 = this.predecessorBigram.get("CLUSTER-"+c1);
+
+        // update all clusters before/after c1 to now include all clusters that
+        // were before/after c2
+        this.mergeMaps(clustersAfterC2, clustersAfterC1);
+        this.mergeMaps(clustersBeforeC2, clustersBeforeC1);
+
+        this.allClusters.put(c1, newCluster);
+        // substitute the removed one
+        if(c2!=(this.k+1)) {
+            this.allClusters.put(c2, this.allClusters.remove(this.k+1));
+        }
+    }
+
+
+    private void updateGraphWeights(int c) {
+        double weight;
+        // update the edges from c1 to any other edge
+        for(int i=1; i<=this.k; i++) {
+            if(i<c) {
+                weight = this.getWeight(i, c);
+            }
+            else {
+                weight = this.getWeight(c, i);
+            }
+            this.putIntoGraph(i, c, weight);
+        }
+    }
+
+
+
+    private void updateGraph(int c1, int c2) {
+        int keptCluster;
+        int removedCluster;
+        if(c1<c2) {
+            keptCluster = c1;
+            removedCluster = c2;
+        }
+        else {
+            keptCluster = c2;
+            removedCluster = c1;
+        }
+
+        // drop the data from c2
+        if(removedCluster!=(this.k+1)) {
+            this.graph.put(removedCluster, this.graph.remove(this.k+1));
+            // update the graph weights for the cluster that took the place
+            // of the removed cluster
+            updateGraphWeights(removedCluster);
+        }
+
+        // update the graph weights for the newly merged cluster
+        updateGraphWeights(keptCluster);
+    }
+
+
+
+    private void updateLForCluster(int c) {
+        double deltaL;
+
+        for(int i=1; i<=this.k; i++) {
+            if(i<c) {
+                deltaL = this.calculateDeltaL(i, c);
+                this.updateDeltaL(i, c, deltaL);
+            }
+            else {
+                deltaL = this.calculateDeltaL(c, i);
+                this.updateDeltaL(c, i, deltaL);
+            }
+        }
+    }
+
+
+
+    private void updateDeltaLAfterMerge(int c1, int c2) {
+        int keptCluster;
+        int removedCluster;
+        if(c1<c2) {
+            keptCluster = c1;
+            removedCluster = c2;
+        }
+        else {
+            keptCluster = c2;
+            removedCluster = c1;
+        }
+
+        if(removedCluster!=(this.k+1)) {
+            this.tableL.put(removedCluster, this.tableL.remove((this.k + 1)));
+            updateLForCluster(removedCluster);
+        }
+
+        updateLForCluster(keptCluster);
+    }
+
+
+    /**
      * Given two {@code Cluster} IDs, it merges the two new clusters.
      * It updates the maps responsible for tracking which clusters are followed
      * by which other clusters to reflect that c1 and c2 are now the same.
@@ -715,10 +1074,19 @@ public class BrownCluster {
      * @param c2 second {@code Cluster} ID
      */
     private void merge(int c1, int c2) {
+        Cluster newCluster = Cluster.mergeTwoClusters(this.allClusters.get(c1),
+                this.allClusters.get(c2), c1);
 
+        this.updateMapCounts(c1, c2, newCluster);
+        this.updateGraph(c1, c2);
+        this.updateDeltaLAfterMerge(c1, c2);
     }
 
 
+    /**
+     * Goes through {@code this.tableL} and finds the best pair of clusters to
+     * be merged.
+     */
     private void mergeBest() {
         double currDeltaL;
         double bestDeltaL = 0;
@@ -749,6 +1117,7 @@ public class BrownCluster {
      * to the smallest loss in MI.
      */
     public void cluster() {
+        generateGraph();
         initTableL();
 
         for(int i=0; i<=100; i++) {

@@ -56,8 +56,23 @@ public class testBrownClustering {
     public void testGenInitCluster() {
         initAndParse();
         bc.generateInitialClusters();
+        //HashMap<Integer, Cluster> clusters = bc.getAllClusters();
+        //printClusters(clusters);
+        bc.printBigrams(true);
+        bc.printBigrams(false);
+    }
+
+    @Test
+    public void testGenGraph() {
+        initAndParse();
+        bc.generateInitialClusters();
+        bc.cluster();
         HashMap<Integer, Cluster> clusters = bc.getAllClusters();
         printClusters(clusters);
+        //HashMap<Integer, Cluster> clusters = bc.getAllClusters();
+        //printClusters(clusters);
+        //bc.generateGraph();
+
     }
 
     @Test
@@ -71,7 +86,7 @@ public class testBrownClustering {
 
     }
 
-    private void printClusters(HashMap<Integer, Cluster> clusters) {
+    private void printClusters(HashMap<Integer,Cluster> clusters) {
         Cluster c;
         for(int i=1; i<=clusters.size(); i++) {
             c = clusters.get(i);
